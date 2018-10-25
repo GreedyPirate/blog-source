@@ -13,7 +13,9 @@ comments: true
 
 
 
-本文介绍如何使用`MockMvc`编写测试用例. 在Spring boot项目中编写测试用例十分简单，通常建立一个Spring boot项目都会test目录下生成一个Test类
+本文介绍如何使用`MockMvc`编写测试用例. 
+
+在Spring boot项目中编写测试用例十分简单，通常建立一个Spring boot项目都会test目录下生成一个Test类
 
 ```java
 @RunWith(SpringRunner.class)
@@ -113,7 +115,7 @@ public class SecurityDemoApplicationTests {
 }
 ```
 
-最终输出响应体
+最终通过测试，并输出响应体
 
 ```json
 {

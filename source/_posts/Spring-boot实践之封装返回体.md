@@ -31,7 +31,9 @@ public class ResponseModel<T> {
 }
 ```
 
-在spring boot中，会将返回的实体类，通过jackson自动转换成json，通过Spring提供的`ResponseBodyAdvice`接口拦截响应体，便可以实现
+在spring boot中，会将返回的实体类，通过jackson自动转换成json
+
+Spring提供了`ResponseBodyAdvice`接口拦截响应体
 
 ```java
 public class ResponseAdvisor implements ResponseBodyAdvice {
@@ -62,4 +64,4 @@ public class ResponseAdvisor implements ResponseBodyAdvice {
 根据笔者遇到的情况，抛砖引玉一下
 
 1. 是否需要对所有的响应拦截，可以在supports方法中判断
-2. 下载返回的是字节数据，再进行包装必然得不到正确的文件
+2. 下载返回的是字节数据，再进行包装必然得不到正确的文件，不应该进行包装
