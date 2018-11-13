@@ -244,8 +244,6 @@ public class RunnerBean implements CommandLineRunner{
 
 ## Todo List
 1. [x] 搭建jenkins，配合git自动构建发布Spring Boot项目
-    1.1 么么哒
-    1.2 哈哈
 2. 研究编排系统Docker，K8s
 3. 研究项目里的Spring扩展
 4. 总结分布式链路追踪

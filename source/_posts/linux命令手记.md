@@ -1,5 +1,5 @@
 ---
-title: 实用的linux命令
+title: linux命令手记
 date: 2018-08-27 17:03:03
 categories: Linux
 tags:
@@ -34,7 +34,7 @@ ps aux|head -1;ps aux|grep -v PID|sort -rn -k +4|head
 ```
 
 ## 按端口终止进程
-```
+```bash
 #!/bin/sh
 PORT=2181
 PID=`lsof -i:${PORT} |grep -v PID |awk '{print $2}'`
@@ -44,6 +44,19 @@ if [ ${PID} ]; then
 else
         echo "could not find process with port:${PORT}"
 fi
+```
+
+## 生成UUID
+
+uuidgen命令
+
+```bash
+uuidgen
+```
+结果
+
+```bash
+d4586ba5-22da-42e5-9662-acad5942988d
 ```
 
 持续积累中 ......

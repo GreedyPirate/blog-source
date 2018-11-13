@@ -1,5 +1,5 @@
 ---
-title: Spring Boot提供的事件监听
+title: Spring boot实践之事件监听
 date: 2018-07-31 15:53:26
 categories: Spring Boot
 tags:
