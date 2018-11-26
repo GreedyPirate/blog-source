@@ -17,10 +17,13 @@ comments: true
 
 ## 服务器列表
 
-| 节点类型 | ip地址                                 |
-| -------- | -------------------------------------- |
-| server   | 10.9.188.187，10.9.171.147，10.9.39.37 |
-| client   | 10.9.181.34，10.9.117.128              |
+| 节点类型 | 名称      | ip           |
+| -------- | --------- | ------------ |
+| server   | server-01 | 10.9.188.187 |
+| server   | server-02 | 10.9.171.147 |
+| server   | server-03 | 10.9.39.37   |
+| client   | client-01 | 10.9.181.34  |
+| client   | client-02 | 10.9.117.128 |
 
 通过wget命令下载Consul到每台服务器中，可以在网页中右键"复制链接"获取下载地址
 
@@ -66,6 +69,12 @@ consul members
 
 ![](https://ws4.sinaimg.cn/large/006tNbRwly1fxjdws5ixuj326w050abp.jpg)
 
+查看Server集群信息
+```bash
+consul operator raft list-peers
+```
+可以看到Leader节点的
+
 
 
 ## 启动client节点
@@ -89,11 +98,16 @@ nohup ./consul agent -bind=10.9.181.34 -data-dir=./data -client=0.0.0.0 -node=cl
 
 打开浏览器，输入10.9.181.34:8500，注意ip是添加了`-ui`参数的client地址
 
-![Consul控制台首页](/Users/admin/Library/Application Support/typora-user-images/image-20181124195303859.png)
+![Consul控制台首页](https://ws3.sinaimg.cn/large/006tNbRwly1fxlfnff3vmj32780h2mze.jpg)
+### 说明
 
-### 重点
+1. Service显示我们的应用服务，其中默认显示了3个Server节点的Consul服务
+2. Nodes显示所有的agent节点，包括server和client
+3. K\V是一个key-vlaue存储，可用于分布式锁的实现
+4. Consul提供了ACL功能，基于ip和port控制请求的畅通
+5. Intention基于ACL，可以添加服务之间的通信规则，允许或者是禁止通信
 
-Consul的界面十分简单，还是在后期的使用当中，个人觉得简单并不
+
 
 
 
