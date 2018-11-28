@@ -87,7 +87,7 @@ user.setXxx();
 
 ```xml
 <dependency>
-	<groupId>org.projectlombok</groupId>
+    <groupId>org.projectlombok</groupId>
     <artifactId>lombok</artifactId>
 </dependency>
 ```
@@ -97,9 +97,9 @@ JavaBean类上加入`@Builder`注解，即可像开头那样调用
 ```java
 @Builder
 public class User {
-    private final String name;
-    private final Integer age;
-    private final String address;
+    private String name;
+    private Integer age;
+    private String address;
 }
 ```
 
