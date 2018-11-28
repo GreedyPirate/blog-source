@@ -40,10 +40,10 @@ nohup ./consul agent -server -bind=10.9.188.187 -client=0.0.0.0 -bootstrap-expec
 新建`start.sh`，将以上命令拷贝进来，通过`sh start.sh`命令启动，接下来说明各个参数的含义
 
 1. -server：表示以server的身份启动agent
-2. -bind：对外提供的绑定地址，填写本机ip即可
+2. -bind：集群内部的通信地址，填写本机ip即可
 3. -client：可以接受通信的客户端地址，`0.0.0.0`表示接收来自任意ip的客户端
-4. -bootstrap-expect：预期的server节点数，只有达到了这个数目，才会形成server集群
-5. -data-dir：保存数据的目录，建议事先新建
+4. -bootstrap-expect：预期的server节点数，只有达到了这个数目，才会形成server集群。注意所有server都应该配置一样的值
+5. -data-dir：保存数据的目录，建议事先新建，server用它持久化集群状态
 6. -datacenter：所在的数据中心，默认dc1
 7. -node：节点名称，最终会显示在界面中
 
@@ -106,6 +106,67 @@ nohup ./consul agent -bind=10.9.181.34 -data-dir=./data -client=0.0.0.0 -node=cl
 3. K\V是一个key-vlaue存储，可用于分布式锁的实现
 4. Consul提供了ACL功能，基于ip和port控制请求的畅通
 5. Intention基于ACL，可以添加服务之间的通信规则，允许或者是禁止通信
+
+
+
+Services中Node Health的含义有些绕，指的是服务所在的agent节点中，通过检查(checks)的个数，check有三个状态：passing(通过), warning(警告),critical(危险)
+
+节点中的checks包含且不限于健康检查，checks分为节点自身的健康状态检查，注册在节点上的服务的健康状态检查，以及自定义的健康状态检查
+
+
+
+## 配置文件
+
+Consul中的启动参数是非常多的，大多数参数都有默认值，完整的参数列表可在[Consul 配置](https://www.consul.io/docs/agent/options.html#command-line-options)中查到。
+
+Consul按以下3个优先级接收参数：
+
+1. 命令行参数
+2. 环境变量
+3. 配置文件
+
+Consul支持json和hcl格式的配置文件，同时也支持指定文件夹的方式，这将按照文件名的词法顺序加载配置文件，例如basic.json先于extra.json加载。后出现的配置项会覆盖前面的配置项
+
+命令行参数的名称不一定完全和配置文件中的参数名称一样，例如：-node对应node_name
+
+### 配置文件示例
+
+以下是一份配置文件的示例，
+
+```json
+{
+    "datacenter": "dc1",
+    "server": true,
+    "bootstrap_expect": 3,
+    "node_name": "server-01",
+    "bind_addr": "10.9.188.187",
+    "client_addr": "0.0.0.0",
+    "data_dir": "./data",
+    "log_level": "INFO",
+    "ports": {
+        "dns": 8600,
+        "http": 8500,
+        "server": 8300,
+        "serf_lan": 8301,
+        "serf_wan": 8302,
+        "https": -1,
+        "grpc": -1
+    },
+    "start_join": ["10.9.181.34"]
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
