@@ -1,6 +1,6 @@
 ---
 title: Effective java读书笔记(一)：对象的创建与销毁篇
-date: 2018-11-26 10:31:35
+date: 2018-11-23 10:31:35
 categories: 读书笔记
 tags: [Java基础]
 toc: true
@@ -136,6 +136,9 @@ public enum UserSingleton {
 }
 ```
 
+### 枚举的线程安全性
+
+枚举类在反编译之后，是一个不可变类，因此它是线程安全的
 
 
 ### 测试饿汉式的反序列化失效情况

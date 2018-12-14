@@ -10,6 +10,8 @@ comments: true
 
 # Spring boot实践之异常处理
 
+## 回顾
+
 在上一章[封装返回体]()中，已经对请求成功的情况进行了封装，接下来便是处理异常，服务的生产者需要通过状态码此次请求是否成功，出现异常时，错误信息是什么，形如:
 
 ```json
@@ -20,9 +22,9 @@ comments: true
 }
 ```
 
-可以看出只需要`code`与`msg`, 参考 `org.springframework.http.HttpStatus`的实现，我们可以定义一个枚举来封装错误信息，对外暴露`getCode`，`getMsg`方法即可。由于异常属于一个基础模块，将这两个方法抽象到一个接口中。
+## 异常接口
 
-错误接口
+可以看出只需要`code`与`msg`, 参考 `org.springframework.http.HttpStatus`的实现，我们可以定义一个枚举来封装错误信息，对外暴露`getCode`，`getMsg`方法即可。由于异常属于一个基础模块，将这两个方法抽象到一个接口中。
 
 ```java
 public interface ExceptionEntity {
@@ -32,6 +34,8 @@ public interface ExceptionEntity {
     String getMsg();
 }
 ```
+
+### 异常枚举
 
 以用户模块为例，所有用户相关的业务异常信息封装到`UserError`中，例如用户不存在，密码错误
 
@@ -65,10 +69,11 @@ public enum UserError implements ExceptionEntity {
 }
 
 ```
+#### 模块标识
 
 需要注意的地方是笔者定义了一个`MODULE`字段，10000代表用户微服务，这样在拿到错误信息之后，可以很快定位报错的应用
 
-自定义异常
+## 自定义异常
 
 ```java
 @Data
@@ -80,6 +85,8 @@ public class ServiceException extends RuntimeException{
 ```
 
 需要说明的是错误接口与自定义异常属于公共模块，而`UserError`属于用户服务
+
+## 示例
 
 之后，便可以抛出异常
 
@@ -98,6 +105,8 @@ throw new ServiceException(UserError.ERROR_PASSWORD);
     "path": "/user/error"
 }
 ```
+
+## 统一异常处理
 
 接下来的异常拦截方式，各路神仙都有自己的方法，笔者只说Spring boot项目中比较通用的`@ControllerAdvice`，由于是Restful接口，这里使用`@RestControllerAdvice`
 
