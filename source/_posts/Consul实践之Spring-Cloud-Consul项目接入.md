@@ -56,7 +56,7 @@ spring:
     name: consumer-service
   cloud:
     consul:
-      host: 10.9.181.34 #consul客户端地址
+      host: localhost #consul客户端地址
       port: 8500
       retry:
         max-attempts: 3
@@ -77,6 +77,7 @@ spring:
           ttl-unit: s
         prefer-ip-address: true #显示真实ip，而不是主机名
 ```
+
 
 
 

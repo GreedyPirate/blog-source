@@ -73,7 +73,8 @@ consul members
 ```bash
 consul operator raft list-peers
 ```
-可以看到Leader节点的
+可以看到Leader节点的信息
+![](https://ws4.sinaimg.cn/large/006tNc79ly1fyvjjfcknrj312c04swge.jpg)
 
 
 
@@ -156,8 +157,10 @@ Consul支持json和hcl格式的配置文件，同时也支持指定文件夹的�
 }
 ```
 
-
-
+### 启动
+```bash
+nohup ./consul agent -config-dir=./config &
+```
 
 
 

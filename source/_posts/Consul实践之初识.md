@@ -15,13 +15,13 @@ comments: true
 # 术语
 为什么有这一小节呢，本人刚接触到Consul时，对代理(agent)，client, server三者之间的关系没有搞清楚，以下对这几个概念做梳理，帮助新人快速理解
 
-* 代理：从Consul官网下载的zip包中，解压后只有一个启动文件，启动之后会运行一个Consul服务，你可以把这个服务理解为agent。agent分为两种，server和client，在启动agent的时候，可以用过参数指定是server还是client
+* 代理：从Consul官网下载的zip包中，解压后只有一个启动文件，启动之后会运行一个Consul服务，你可以把这个服务理解为agent。agent分为两种，server和client，在启动agent的时候，可以通过参数指定是server还是client
 * agent集群：所有server和client节点形成的集群
 * server：server主要维护应用服务信息，响应查询，参与一致性选举，与别的数据中心交换信息。
 * server集群：server集群中的节点包括一个leader和多个follower，通过raft算法选举leader，保证一致性。server官方推荐的个数是一个数据中心有3或5个节点，一是为了高可用，二是奇数个方便选举，同时要保证server节点的存活数不低于（N/2）+1个，如3个server组成的集群，必须保证2个server存活，5个保证3个存活，否则server集群处于不可用状态
 * client：agent的另一种，主要用于转发RPC请求，本身是无状态的，运行在后台维护gossip协议池
 * datacenter：笔者对数据中心的理解还十分简陋，大概是机房的意思吧，将Consul部署到多个dc中，增加了可用性
-* gossip协议：翻译为流言协议，取自人类社会中的谣言传播，在Consul中用于管理agent和广播消息，在一个agent集群中新加入一个节点，或离开一个节点时，会通过gossip协议告诉集群中的所有节点，但并不保证一致性，也就是说在某个时刻，一个节点离开后，其余的节点不能保证都知道它离开了。Consul的这些gossip协议功能是通过自家的另一个开源产品Serf实现的，这里对Serf要有个印象
+* gossip协议：翻译为流言协议，取自人类社会中的谣言传播，在Consul中用于管理agent和广播消息，在一个agent集群中新加入一个节点，或离开一个节点时，会通过gossip协议告诉集群中的所有节点，Consul的这些gossip协议功能是通过自家的另一个开源产品Serf实现的，这里对Serf要有个印象
 * LAN gossip与WAN gossip：分别代表一个数据中心中agent集群之间的的gossip协议，和多个数据中心之间的gossip协议
 
 
