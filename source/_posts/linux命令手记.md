@@ -71,7 +71,20 @@ d4586ba5-22da-42e5-9662-acad5942988d
 du -h --max-depth=1
 ```
 
+## top命令技巧
 
+shift+p: 按CPU使用率降序排序，用户查找CPU使用率最高的进程
+shift+m: 按内存使用率降序排序
+
+top -p <pid> -H ：查看进程中各线程详情
+
+
+## netstat命令技巧
+
+按pid统计连接数
+```bash
+netstat -natp|awk 'print $7'|sort|uniq -c|sort -rn
+```
 
 持续积累中 ......
 
