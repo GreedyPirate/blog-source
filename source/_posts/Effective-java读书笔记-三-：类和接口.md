@@ -1,5 +1,5 @@
 ---
-title: Effective-java读书笔记-三-：类和接口
+title: Effective-java读书笔记(三)：类和接口
 date: 2018-11-28 22:11:35
 categories: 读书笔记
 tags: [Java基础]

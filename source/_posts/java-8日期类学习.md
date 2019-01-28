@@ -8,20 +8,20 @@ toc: true
 comments: true
 ---
 
->最近开发过程中遇到了很多时间类处理，由于对Calender类不熟悉，我说这个类设计的烂，谁赞成，谁反对..，也被推荐过joda-time类库，鉴于项目用的都是java 8了，是时候了解一下java.time包下的类了
+>最近开发过程中遇到了很多时间类处理，由于对Calender类不熟悉，我说这个类设计的烂，谁赞成，谁反对？也被推荐过joda-time类库，鉴于项目用的都是java 8了，是时候了解一下java.time包下的类了
 
 # 导言
 
 ## java 8 日期类的优势
-用完java 8的API之后，只有一个感觉，爽，没有啰嗦的方法，很多静态工厂方法，of，from见名知意，用到后面，一些api自己都可以猜出来了，同时api更人性化，例如对比之前的获取月份方法，是从0开始，机械化的思维，反观java 8，我能通过getMonthValue直接获取，无须+1，虽然改动很小，但我心里看代码舒服多了
+用完java 8的API之后，只有一个感觉，爽，没有啰嗦的方法，很多静态工厂方法，of，from见名知意，用到后面，一些api自己都可以猜出来了，同时api更人性化，例如对比之前的获取月份方法，是从0开始，机械化的思维，反观java 8，我能通过getMonthValue直接获取，无须+1
 
-对于joda-time，从个人角度讲，实在不想再去记忆一套api，同时从项目角度来说，我能用jdk实现的，为什么要依赖第三方jar包，这点对于实际开发来说更重要
+对于joda-time，从个人角度讲，实在不想再去记忆一套api，同时从项目角度来说，我能用jdk实现的，为什么要依赖第三方jar包，这点对于实际开发来说更重要。但对于还在使用java 8以下版本的同学joda-time还是值得推荐的
 
 ## API的记忆方法
 在Effective java读书笔记一文中，静态方法相较构造方法有更多的优势，尤其是在提供给开发者使用时。java 8这方面做得很好，of，from，parse，format，minus，plus等等方法，一眼就知道作者的意图
 
 ## 时间分类
-java 8提供了3个基础时间类：LocalDate, LocalDateTime, LocalTime，分别代表日期，日期+时间，时间
+java 8提供了3个基础时间类：LocalDate, LocalDateTime, LocalTime，分别代表日期，日期+时间，时间(时分秒)
 
 同时三者之间可以部分转换，之所以称之为部分，很简单的例子是日期无法直接转换为具体的日期+时间，因为它缺少时分秒，这可以理解为一种精度损失，当然你可以通过默认值来补全
 
@@ -65,6 +65,11 @@ yyyy-MM-dd是默认的格式，可以省略第二个参数，类似的HH:mm:ss�
 ### 毫秒时间戳转时间
 注意两点：
 1. Instant用于表示瞬时值，它和秒，毫秒是相关联的，再将Instant转换为LocalDateTime
+```java
+long time = 1548154964271L;
+Instant instant = Instant.ofEpochMilli(time);
+LocalDateTime dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+```
 2. 需要判断时间戳是毫秒还是秒，PHP等语言只能精确到秒，请求这类接口时需注意
 给出一个转换方法示例
 ```java
@@ -98,7 +103,7 @@ Period period = Period.between(LocalDate.of(2019, 1, 19), LocalDate.of(2019, 2, 
 long days = ChronoUnit.DAYS.between(LocalDate.of(2019, 1, 19), LocalDate.of(2019, 2, 10));
 ```
 # 结束语
-java 8时间类的使用写到这里告一段落，关于时区的使用，也见缝插针的介绍了下，写这篇文章对笔者最大的挑战是表达能力，api很多，我想表达的是有规律的使用api，而不是死记硬背，最后分析一个自己写的DateUtils
+java 8时间类的使用写到这里告一段落，关于时区的使用，也见缝插针的介绍了下，写这篇文章对笔者最大的挑战是表达能力，api很多，我想表达的是有规律的使用api，而不是死记硬背，最后分享一个自己写的DateUtils
 
 # DateUtils
 ```java

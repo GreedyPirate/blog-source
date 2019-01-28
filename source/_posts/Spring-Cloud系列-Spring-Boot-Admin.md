@@ -2,7 +2,7 @@
 title: 'Spring Cloud系列: Spring Boot Admin'
 date: 2018-09-07 16:20:35
 categories: Spring Cloud
-tags: [Spring Cloud,监控,官方文档阅读]
+tags: [Spring Cloud,监控,官方文档阅读,翻译]
 toc: true
 comments: true
 ---
