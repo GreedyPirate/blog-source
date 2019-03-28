@@ -116,7 +116,7 @@ producer.send(myRecord, new Callback(){...})
 
 Callback将在producer的I/O线程中触发，所以它必须轻量，快速，否则其他线程的消息会延迟发送。如果你在Callback中有耗时的逻辑处理，建议使用你自己的Executor，在Callback体中并发的执行
 ```
-可以看到Spring默认使用的是异步发送(鬼才用同步)，将结果和异常都保存在了SettableListenableFuture中
+Spring同样支持同步和异步，将结果和异常都保存在了SettableListenableFuture中
 这里再提一下Callback和Producerinterceptor的使用
 
 ### Callback
@@ -241,7 +241,8 @@ public final class RecordMetadata {
 
 在前期基本工作做好后，kafka便可以开始发送了，发送过程比较复杂，首先要获取broker端集群信息，broker到底是个什么情况，地址是什么，有几台服务器，里面已有的topic，topic已有的分区，分区在broker的分布，ISR列表，OLR列表等等信息，这些都是发送之前要关心的
 
-* Metadata：这些元信息都封装在了Metadata类中，里面的Cluster对象封装了broker集群信息，Metadata还负责这些元信息的缓存及刷新
+* Metadata：这些元信息都封装在了Metadata类中，Metadata还负责这些元信息的缓存及刷新
+* Cluster: Metadata中持有一个Cluster对象，kafka每一个broker都保存了topic的leader副本分区信息，producer只需要随机向一个broker发送请求就可以获取获取到，同时该对象还有每一个kafka broker节点的元信息，如ip端口等
 
 * TopicPartition：将topic和计算好的分区封装到一起
 * InterceptorCallback：如果没有拦截器，它就是Callback回调

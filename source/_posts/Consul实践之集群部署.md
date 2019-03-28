@@ -2,7 +2,7 @@
 title: Consul实践之集群部署
 date: 2018-11-18 18:09:22
 categories: 微服务注册中心
-tags: [consul,注册中心]
+tags: [consul,注册中心,中间件]
 toc: true
 comments: true
 ---

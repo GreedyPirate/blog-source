@@ -21,7 +21,3 @@ comments: true
 项目名称可参考spring-cloud组件，例如叫base-starter-web, base-start-logger等
 
 # 封装starter
-
-
-
-TopicPartition

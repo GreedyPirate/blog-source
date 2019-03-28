@@ -2,7 +2,7 @@
 title: Consul实践之初识
 date: 2018-11-16 19:13:32
 categories: 微服务注册中心
-tags: [consul,注册中心]
+tags: [consul,注册中心,中间件]
 toc: true
 comments: true
 ---
