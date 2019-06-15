@@ -13,12 +13,12 @@ comments: true
 # 导言
 
 ## java 8 日期类的优势
-用完java 8的API之后，只有一个感觉，爽，没有啰嗦的方法，很多静态工厂方法，of，from见名知意，用到后面，一些api自己都可以猜出来了，同时api更人性化，例如对比之前的获取月份方法，是从0开始，机械化的思维，反观java 8，我能通过getMonthValue直接获取，无须+1
+用完java 8的API之后，只有一个感觉：爽，没有啰嗦的方法，很多静态工厂方法，of，from见名知意，用到后面，一些api自己都可以猜出来了，同时api更人性化，例如对比之前的获取月份方法，是从0开始，机械化的思维，反观java 8，我能通过getMonthValue直接获取，无须+1
 
 对于joda-time，从个人角度讲，实在不想再去记忆一套api，同时从项目角度来说，我能用jdk实现的，为什么要依赖第三方jar包，这点对于实际开发来说更重要。但对于还在使用java 8以下版本的同学joda-time还是值得推荐的
 
 ## API的记忆方法
-在Effective java读书笔记一文中，静态方法相较构造方法有更多的优势，尤其是在提供给开发者使用时。java 8这方面做得很好，of，from，parse，format，minus，plus等等方法，一眼就知道作者的意图
+在Effective java读书笔记一文中，静态方法相较构造方法有更多的优势，尤其是在提供给开发者使用时。java 8这方面做得很好，of，from，parse，format，minus，plus等等都是见名知意的方法
 
 ## 时间分类
 java 8提供了3个基础时间类：LocalDate, LocalDateTime, LocalTime，分别代表日期，日期+时间，时间(时分秒)
@@ -36,11 +36,15 @@ java 8支持通过时区id，时区偏移量来获取时间
 这几个方面时间的互相转换也需要关注
 
 # API
+
 ## 获取时间
+
 ### now
 now方法用于获取日期类的当前值，例如LocalDate获取当前日期，LocalTime获取当前时间的时分秒等信息
+
 ### 获取年月日
 根据常识，仅LocalDate, LocalDateTime可以获取年月日，分别由getYear,getMonthValue,getDayOfMonth获取，时分秒的获取方式同理LocalDateTime
+
 ### 获取自1970-01-01T00:00:00的毫秒数，秒数，天数
 不用死记硬背，只要想清楚这几个类分别代表了什么类型的时间即可推断出api
 ```java
@@ -49,20 +53,28 @@ LocalDateTime.now().toEpochSecond(ZoneOffset.ofHours(8));
 LocalDate.now().toEpochDay();
 ```
 ZoneOffset.ofHours(8)可以理解为北京时间位于东八区
+
 ### 获取前一天，一个月，一年等等
 记住两个单词即可，minus表示减，plus表示加
 至于你想加减些什么，首先要确定要加减的单位是什么，比如分钟，那肯定是在LocalDateTime，LocalTime里找，加年，加月同理，剩下的api就不啰嗦了，授人以鱼不如授人以渔，读者有兴趣自己探索。
 
 ## 时间转换
-### 文本转时间
+
+### 文本与时间之间的相互转换
 parse用于处理从文本到日期的转换，根据DateTimeFormatter的格式解析成日期
 ```java
-LocalDate.parse("2019-01-11", DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+LocalDate date = LocalDate.parse("2019-01-11", DateTimeFormatter.ofPattern("yyyy-MM-dd"))
 ```
 yyyy-MM-dd是默认的格式，可以省略第二个参数，类似的HH:mm:ss在转换为时分秒时也可以省略
 
+将日期格式化为文本
+```java
+String text = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+```
 
-### 毫秒时间戳转时间
+
+### 时间戳与时间之间的转换
+
 注意两点：
 1. Instant用于表示瞬时值，它和秒，毫秒是相关联的，再将Instant转换为LocalDateTime
 ```java
@@ -70,6 +82,7 @@ long time = 1548154964271L;
 Instant instant = Instant.ofEpochMilli(time);
 LocalDateTime dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
 ```
+
 2. 需要判断时间戳是毫秒还是秒，PHP等语言只能精确到秒，请求这类接口时需注意
 给出一个转换方法示例
 ```java
@@ -89,6 +102,7 @@ private static Instant transToInstant(long time) {
 ```
 
 ### 与Date类的转换
+
 记住一点，旧版的Date与java 8中的日期类的转换桥梁是Instant
 ```
 Date date = Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant());
@@ -97,11 +111,38 @@ LocalDateTime dateTime = date.toInstant().atZone(ZoneId.systemDefault()).toLocal
 ```
 
 ## 获取时间段
-Period和ChronoUnit都可以做到计算时间段，下面以计算两个时间时间的天数为例
+Period和ChronoUnit都可以做到计算时间段，但又有区别，下面以计算两个时间时间的天数为例
 ```java
-Period period = Period.between(LocalDate.of(2019, 1, 19), LocalDate.of(2019, 2, 10));
-long days = ChronoUnit.DAYS.between(LocalDate.of(2019, 1, 19), LocalDate.of(2019, 2, 10));
+Period period = Period.between(LocalDate.of(2017, 1, 19), LocalDate.of(2019, 5, 10));
+long days = ChronoUnit.DAYS.between(LocalDate.of(2017, 1, 19), LocalDate.of(2019, 5, 10));
 ```
+Period返回的是两个日期之间相差几年几月几日，以上面两个日期为例，以下三个方法分别返回: 2年, 3个月, 21天
+period.getYears(),period.getMonths(),period.getDays()
+
+ChronoUnit则计算出了两个日期直接具体的天数，结果为841天
+
+## 与周相关的几个API
+```java
+LocalDate now = LocalDate.now();
+// 今天是周几
+DayOfWeek dayOfWeek = now.getDayOfWeek();
+// 获取下周一
+LocalDate nextMonday = now.with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+// 获取本月最后一天
+LocalDate lastDayofMonth = now.with(TemporalAdjusters.lastDayOfMonth());
+// 获取本周属于当月第几周
+int weekth = now.get(ChronoField.ALIGNED_WEEK_OF_MONTH);
+```
+打印输出为：
+```
+dayOfWeek = TUESDAY
+nextMonday = 2019-05-06
+lastDayofMonth = 2019-04-30
+weekth = 5
+```
+以前是笔者开发中遇到的api，还有很多有用的api未介绍，大家可以用到时查阅文档
+
+
 # 结束语
 java 8时间类的使用写到这里告一段落，关于时区的使用，也见缝插针的介绍了下，写这篇文章对笔者最大的挑战是表达能力，api很多，我想表达的是有规律的使用api，而不是死记硬背，最后分享一个自己写的DateUtils
 
