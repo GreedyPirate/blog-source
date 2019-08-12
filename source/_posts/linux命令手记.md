@@ -75,6 +75,7 @@ du -h --max-depth=1
 
 shift+p: 按CPU使用率降序排序，用户查找CPU使用率最高的进程
 shift+m: 按内存使用率降序排序
+shift+h: 显示线程占用cpu情况
 
 top -p <pid> -H ：查看进程中各线程详情
 

@@ -125,7 +125,7 @@ Map<String, List<PartitionInfo>> partitionsByTopic
 
 此时要分区，首先要获取这个topic的PartitionInfo，第一行代码的作用就是这个，map.get(topic)，很简单
 
-接下分两种情况：用户指定了key，和未指定key，我们知道旧版本的kafka在用户未指定key的情况下会默认将消息分配到某一个分区，但这样会造成数据倾斜，官方后来对此作了优化，采用随机的方式，简单提一下这块的代码
+接下分两种情况：用户指定了key，和未指定key，我们知道旧版本的kafka在用户未指定key的情况下会默认将消息分配到某一个分区，但这样会造成数据倾斜，官方后来对此作了优化，采用轮询(round-robin)的方式，简单提一下这块的代码
 
 #### 随机分配
 
