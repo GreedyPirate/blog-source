@@ -29,7 +29,7 @@ comments: true
 
 官网给出了两个数据中心的[俯视图](https://www.consul.io/docs/internals/architecture.html)，为了方便理解，笔者自己画了一个单数据中心的架构图，帮助大家理解
 
-![Consul架构](https://ws2.sinaimg.cn/large/006tNbRwly1fxlh3wc72cj30mh0glwf0.jpg)
+![Consul架构](https://ae01.alicdn.com/kf/H019c969ef42548ed81a4e6c67792a7e34.png)
 
 ## 解读
 

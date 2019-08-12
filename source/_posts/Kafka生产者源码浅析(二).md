@@ -182,7 +182,7 @@ kafka使用一个CopyOnWriteMap保存分区和队列的关系，即只有在修�
 ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches = new CopyOnWriteMap<>();
 ```
 该map的模型如下
-![模型](https://ws4.sinaimg.cn/large/006tNc79ly1fzmdhav2ifj311q0gsgmu.jpg)
+![模型](https://ae01.alicdn.com/kf/H409e050f5b184f7ebad5ecc5f12d9e41V.png)
 
 append方法返回一个RecordAppendResult，它是消息在添加进内存缓冲区后的结果：Deque队列中是否有元素，是否有新的ProducerBatch创建，两个条件都可以去通知sender线程发送消息
 

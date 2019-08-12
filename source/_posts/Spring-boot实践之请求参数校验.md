@@ -123,7 +123,7 @@ public void testBlankName() throws Exception {
 
 此时我们发现已经进入方法断点
 
-![进入断点](https://ws3.sinaimg.cn/large/006tNbRwly1fwdk366fb4j30s002eglr.jpg)
+![进入断点](https://ae01.alicdn.com/kf/H954c71c251af4bbbb3b337fb595cdaa5c.png)
 
 ## 统一异常处理
 

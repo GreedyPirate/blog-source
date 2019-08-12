@@ -111,7 +111,7 @@ protected void invokeCustomInitMethod(String beanName, final Object bean, RootBe
 org.springframework.beans.factory.support.BeanDefinitionValidationException: Couldn't find an init method named 'init' on bean with name 'initBeanExtend'
 ```
 在IDEA下会有编译警告
-<img src="https://ws3.sinaimg.cn/large/006tKfTcly1ftn30ruqgzj30lc03waas.jpg" width="65%" align="left"/>
+<img src="https://ae01.alicdn.com/kf/Hb3803affca7840a190a0a6a76efa6185L.png" width="65%" align="left"/>
 
 ## 实际应用
 

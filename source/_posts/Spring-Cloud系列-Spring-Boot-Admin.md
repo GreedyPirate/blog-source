@@ -205,7 +205,7 @@ info:
 
 效果图如下
 
-<img src="https://ws4.sinaimg.cn/large/0069RVTdly1fv136xsz3yj31kw0b63zz.jpg" width="65%" align="left"/>
+<img src="https://ae01.alicdn.com/kf/H333f7d74baad4ccc92a57ed4a6d88fa9u.png" width="65%" align="left"/>
 
 ## 查看实时滚动日志
 
@@ -219,7 +219,7 @@ logging.pattern.file=%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${P
 ````
 
 日志效果如下图：
-<img src="https://ws3.sinaimg.cn/large/0069RVTdly1fv13clxp0qj31kw0d9wts.jpg" width="65%" align="left"/>
+<img src="https://ae01.alicdn.com/kf/H61eae22c490944e195e0ed73a306cb62J.png" width="65%" align="left"/>
 
 可以看到提供了下载按钮，其实是打开了一个网页页签，可复制出来，中文日志会出现乱码
 
@@ -247,7 +247,7 @@ info:
     title: mosi
 ```
 
-<img src="https://ws2.sinaimg.cn/large/0069RVTdly1fv13qitypfj30x80mkjt8.jpg" width="65%" align="left"/>
+<img src="https://ae01.alicdn.com/kf/H8f6d48f10cc04dc898df3e62d109b7258.png" width="65%" align="left"/>
 
 **值得注意的是，两种方式的k-v表现形式, 第一个是tags.content为key，第二个是tags为key**
 
@@ -331,7 +331,7 @@ admin-static-client将是在界面上显示的客户端地址
 ### 最终收到的邮件如图
 
 将客户端下线之后，收到的邮件如下
-<img src="https://ws4.sinaimg.cn/large/0069RVTdly1fv4hbx46zfj30we0lk41e.jpg" width="65%" align="left"/>
+<img src="https://ae01.alicdn.com/kf/H20620d2d3d824685bbbe9970ca308c9e9.png" width="65%" align="left"/>
 
 余下的第三方应用接入以及安全防护不再介绍，直接进入自定义通知
 

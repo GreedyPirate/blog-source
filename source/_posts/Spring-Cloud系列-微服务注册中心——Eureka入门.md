@@ -74,8 +74,8 @@ eureka:
 `127.0.0.1     localhost peer1 peer2`.如果你的内存够大，也可以用两台虚拟机
 2. 对于Eureka来说，无效的实例是通过定时任务去清除的，默认是60s，这里我设置为了10s
 3. IDEA中通过一个项目启动Eureka集群,通过spring.profiles.active区分配置
-![点击Edit Configurations](https://ws1.sinaimg.cn/large/006tNbRwly1fw8r9iqvrgj30u0044my9.jpg)
-![点击加号新增Spring boot](https://ws3.sinaimg.cn/large/006tNbRwly1fw8rfa3p3ej31kw0asn18.jpg)
+![点击Edit Configurations](https://ae01.alicdn.com/kf/H4cb1c76c66ea4fedafb4c02b608c5934u.png)
+![点击加号新增Spring boot](https://ae01.alicdn.com/kf/Hf5c9b7738f2d41bbaee7716cb9545eadV.png)
 
 
 

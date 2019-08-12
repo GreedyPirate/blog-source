@@ -144,13 +144,13 @@ ExtraListener listening： CustomerEvent has been triggered, event name is click
 
 ## 源码跟踪
 
-<img src="https://ws4.sinaimg.cn/large/006tKfTcly1ftndnytxtsj30wa03maat.jpg" width="65%" align="left"/>
+<img src="https://ae01.alicdn.com/kf/H01d163bde58c41e0b908f08d02d02af1N.png" width="65%" align="left"/>
 
 这里和观察者模式的遍历一样，调用所有的监听器
-<img src="https://ws4.sinaimg.cn/large/006tKfTcly1ftndouogerj312e0b2gok.jpg" width="65%" align="left"/>
+<img src="https://ae01.alicdn.com/kf/H9c5679f3036b4c40b70c684e1d7cf4972.png" width="65%" align="left"/>
 
 进入getApplicationListeners方法，可以看到如何查找注册在event上的Listener
-<img src="https://ws4.sinaimg.cn/large/006tKfTcly1ftndn5aqzej30us0ion18.jpg" width="65%" align="left"/>
+<img src="https://ae01.alicdn.com/kf/Ha30a903295484252a75561e2fc2717b2f.png" width="65%" align="left"/>
 
 
 根据@Order注解对Listener排序，

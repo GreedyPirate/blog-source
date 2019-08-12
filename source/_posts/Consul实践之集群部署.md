@@ -67,14 +67,14 @@ consul members
 
 显示3个Type为server的节点集群，同时3台服务的status为alive
 
-![](https://ws4.sinaimg.cn/large/006tNbRwly1fxjdws5ixuj326w050abp.jpg)
+![](https://ae01.alicdn.com/kf/H7ac7051d086b432baf435d61590453e6K.png)
 
 查看Server集群信息
 ```bash
 consul operator raft list-peers
 ```
 可以看到Leader节点的信息
-![](https://ws4.sinaimg.cn/large/006tNc79ly1fyvjjfcknrj312c04swge.jpg)
+![](https://ae01.alicdn.com/kf/H3da2a78581064c8aba013eb8ef48bbbfd.png)
 
 
 
@@ -99,7 +99,7 @@ nohup ./consul agent -bind=10.9.181.34 -data-dir=./data -client=0.0.0.0 -node=cl
 
 打开浏览器，输入10.9.181.34:8500，注意ip是添加了`-ui`参数的client地址
 
-![Consul控制台首页](https://ws3.sinaimg.cn/large/006tNbRwly1fxlfnff3vmj32780h2mze.jpg)
+![Consul控制台首页](https://ae01.alicdn.com/kf/Hea6df032802746ac90e1dea8db1f67632.png)
 ### 说明
 
 1. Service显示我们的应用服务，其中默认显示了3个Server节点的Consul服务

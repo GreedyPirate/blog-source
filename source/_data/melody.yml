@@ -121,9 +121,9 @@ cdn:
 
 # Post info settings
 # ---------------
-avatar: https://ws1.sinaimg.cn/large/0069RVTdly1ftxifnd6k3j30u00u0gnu.jpg
+avatar: https://ae01.alicdn.com/kf/He0f82cbc452e4e99b7da670575752df0l.png
 
-top_img: https://ws1.sinaimg.cn/large/0069RVTdly1ftxp29hxe9j31hc0u04cf.jpg # false or url of img 
+top_img: https://ae01.alicdn.com/kf/H6e9ae455bca04f4098243e3f73a85c4fb.png # false or url of img 
 
 post_meta:
   date_type: created # created or updated 
@@ -166,10 +166,10 @@ slide:
 
 QR_code:
   - itemlist:
-    img: https://ws2.sinaimg.cn/large/0069RVTdly1ftxiehjrosj30fk0idmxy.jpg
+    img: https://ae01.alicdn.com/kf/H50b5d4d79e454447974210dae2d054435.png
     text: 支付宝打赏
   - itemlist:
-    img: https://ws4.sinaimg.cn/large/0069RVTdly1ftxievplbnj30jb0jddh5.jpg
+    img: https://ae01.alicdn.com/kf/H45f5b133580045879faaa5fcbe9b598fu.png
     text: 微信打赏
 
 # adv:

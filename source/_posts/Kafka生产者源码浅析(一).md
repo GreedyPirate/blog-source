@@ -178,7 +178,7 @@ spring.kafka.producer.properties.interceptor.classes=your class
 
 经过拦截器拦截后，发送消息的流程又是如何呢
 
-![发送流程](https://ws3.sinaimg.cn/large/006tNc79ly1fzk5dhhii8j31dq0iogqw.jpg)
+![发送流程](https://ae01.alicdn.com/kf/H0d7dcdd1533945eda1d032ad9b7b7c5e8.png)
 
 上图摘自胡夕老师的《Apache kafka实战》，十分形象的描绘了消息发送流程，正如上图所示，doSend方法只有有一个入参ProducerRecord，用于封装消息，一个出参RecordMetadata，它是broker应答之后的返回信息。二者的源码如下：
 
