@@ -12,7 +12,8 @@ comments: true
 ## 回顾
 
 在doSend方法中，最后几行代码是在消息添加进内存缓冲区之后，判断是否有可发送的消息，并唤醒了Sender线程
-
+batchIsFull的判断依据有两个：deque.size() > 1 || last.isFull()，意思是队列中至少有一个ProducerBatch已满，或者原来一个满的都没有，添加完这条消息就满了，两个条件满足其一就说明可以发送了
+newBatchCreated表示新创建了一个ProducerBatch就发送，这里确实以前不知道
 ```java
 if (result.batchIsFull || result.newBatchCreated) {
     log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
@@ -27,6 +28,8 @@ if (result.batchIsFull || result.newBatchCreated) {
 1. 先拿到缓冲区中待发送的所有消息，找到每个partitions leader所在的broker
 2. 然后按broker的地址分组
 3. 和broker建立连接，发送消息
+这样请求按broker分组合并，提升了效率，但是kafka有一个限定，同一个client对一个broker只能一个一个发请求，不能同时发送多个请求，这也是为了缓解broker端的压力
+为了实现该方式，必然有个先进先出的请求队列，前一个请求拿到响应之后，才能出队，进行第二个请求
 
 ## sender发送消息
 
@@ -34,26 +37,21 @@ Sender类实现了Runnable接口，那么主逻辑就应该在run方法中了，
 
 ```java
 void run(long now) {
+    // 省略事务相关代码 ....
     long pollTimeout = sendProducerData(now);
     client.poll(pollTimeout, now);
 }
 ```
 
-sendProducerData方法有点长，分段分析
+sendProducerData方法主要分以下三个步骤
 
-### part one
-
-1. 获取集群信息
-2. 从RecordAccumulator获取可以发送消息的kafka broker节点
-3. 如果有partitions还没有leader，请求更新metadata
-4. 检查网络是否符合发送条件，不符合则移除
-
+### 步骤1
 ```java
-Cluster cluster = metadata.fetch();
-
-// get the list of partitions with data ready to send
 RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
-
+```
+这行代码内部实现虽然有点复杂，但就一个作用，获取所有要发送分区的leader副本所在节点
+然后就是对结果的处理及过滤, 不知道leader副本的topic交给metadata去更新，然后又根据NetworkClient过滤连接异常的节点
+```java
 // if there are any partitions whose leaders are not known yet, force metadata update
 if (!result.unknownLeaderTopics.isEmpty()) {
     // The set of topics with unknown leader contains topics with leader election pending as well as
@@ -66,6 +64,7 @@ if (!result.unknownLeaderTopics.isEmpty()) {
 
     this.metadata.requestUpdate();
 }
+
 // remove any nodes we aren't ready to send to
 Iterator<Node> iter = result.readyNodes.iterator();
 long notReadyTimeout = Long.MAX_VALUE;
@@ -77,3 +76,28 @@ while (iter.hasNext()) {
     }
 }
 ```
+
+### 步骤2
+主要根据缓冲区对象的drain方法，把所有分区消息，按照Node id分组
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

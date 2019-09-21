@@ -135,7 +135,7 @@ counter = new AtomicInteger(ThreadLocalRandom.current().nextInt())
 ```
 以topic为key保存在一个ConcurrentHashMap中，每次用完counter自增并返回，这就是nextValue方法的作用
 
-接下来从Cluster中获取可用的分区信息，获取分区数，使用counter对其取模，然后从可用分区列表中获取一个分区，由于counter的自增，达到了轮询(round-robin)的效果。但如果没有可用的分区，则从所有分区中挑选
+接下来从Cluster中获取可用的分区信息，获取分区数，使用counter对其取模，然后从可用分区列表中获取一个分区，由于counter的自增，达到了轮询(round-robin)的效果。但如果没有可用的分区，则从所有分区中挑选(有种破罐子破摔的味道)
 
 Utils.toPositive用于取绝对值，kafka选择了一个cheap way: 与运算
 
@@ -176,7 +176,7 @@ return result.future;
 而kafka真正使用的是一个双端队列，基于"工作密取"模式减少队列竞争，提高效率
 
 RecordAccumulator为topic的每一个分区都创建了一个ArrayDeque(thread unsafe)，里面存放的元素是ProducerBatch，它就是待批量发送的消息。
-kafka使用一个CopyOnWriteMap保存分区和队列的关系，即只有在修改该map时把内容Copy出去形成一个新的内容然后再改
+kafka使用一个CopyOnWriteMap保存分区和队列的关系，即只有在修改该map时把内容Copy出去形成一个新的map，然后再改变引用，这也是COW机制的常见用法
 
 ```java
 ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches = new CopyOnWriteMap<>();
@@ -197,70 +197,148 @@ append方法的具体实现过程还是很复杂的，这里说下笔者对这�
 7. 添加成功之后，返回future对象，将ProducerBatch添加至Deque队列，同时用一个集合IncompleteBatches持有住了ProducerBatch
 8. 清理buffer空间，封装RecordAppendResult结果：Deque队列大小，新建的ProducerBatch对象是否已满
 
-完整的源码如下，其中的调用栈还可以深入，有兴趣的同学可以顺着我的思路继续看
+
+完整的源码如下
 
 ```java
-    public RecordAppendResult append(TopicPartition tp,
-                                     long timestamp,
-                                     byte[] key,
-                                     byte[] value,
-                                     Header[] headers,
-                                     Callback callback,
-                                     long maxTimeToBlock) throws InterruptedException {
-        // We keep track of the number of appending thread to make sure we do not miss batches in
-        // abortIncompleteBatches().
-        appendsInProgress.incrementAndGet();
-        ByteBuffer buffer = null;
-        if (headers == null) headers = Record.EMPTY_HEADERS;
-        try {
-            // check if we have an in-progress batch
-            Deque<ProducerBatch> dq = getOrCreateDeque(tp);
-            synchronized (dq) {
-                if (closed)
-                    throw new KafkaException("Producer closed while send in progress");
-                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
-                if (appendResult != null)
-                    return appendResult;
-            }
-
-            // we don't have an in-progress record batch try to allocate a new batch
-            byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
-            int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
-            log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
-            buffer = free.allocate(size, maxTimeToBlock);
-            synchronized (dq) {
-                // Need to check if producer is closed again after grabbing the dequeue lock.
-                if (closed)
-                    throw new KafkaException("Producer closed while send in progress");
-
-                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
-                if (appendResult != null) {
-                    // 万一这个时候又有了可用的ProducerBatch呢，我们就不用新建了呀，唉~这就很舒服
-                    // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
-                    return appendResult;
-                }
-
-                MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
-                ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
-                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds()));
-
-                dq.addLast(batch);
-                incomplete.add(batch);
-
-                // Don't deallocate this buffer in the finally block as it's being used in the record batch
-                buffer = null;
-
-                return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true);
-            }
-        } finally {
-            if (buffer != null)
-                free.deallocate(buffer);
-            appendsInProgress.decrementAndGet();
+public RecordAppendResult append(TopicPartition tp,
+                                 long timestamp,
+                                 byte[] key,
+                                 byte[] value,
+                                 Header[] headers,
+                                 Callback callback,
+                                 long maxTimeToBlock) throws InterruptedException {
+    // We keep track of the number of appending thread to make sure we do not miss batches in
+    // abortIncompleteBatches().
+    appendsInProgress.incrementAndGet();
+    ByteBuffer buffer = null;
+    if (headers == null) headers = Record.EMPTY_HEADERS;
+    try {
+        // check if we have an in-progress batch
+        Deque<ProducerBatch> dq = getOrCreateDeque(tp);
+        synchronized (dq) {
+            if (closed)
+                throw new KafkaException("Producer closed while send in progress");
+            RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
+            if (appendResult != null)
+                return appendResult;
         }
+
+        // we don't have an in-progress record batch try to allocate a new batch
+        byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
+        int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
+        log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
+        buffer = free.allocate(size, maxTimeToBlock);
+        synchronized (dq) {
+            // Need to check if producer is closed again after grabbing the dequeue lock.
+            if (closed)
+                throw new KafkaException("Producer closed while send in progress");
+
+            RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
+            if (appendResult != null) {
+                // 万一这个时候又有了可用的ProducerBatch呢，我们就不用新建了呀，唉~这就很舒服
+                // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
+                return appendResult;
+            }
+
+            MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
+            ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
+            FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds()));
+
+            dq.addLast(batch);
+            incomplete.add(batch);
+
+            // Don't deallocate this buffer in the finally block as it's being used in the record batch
+            buffer = null;
+
+            return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true);
+        }
+    } finally {
+        if (buffer != null)
+            free.deallocate(buffer);
+        appendsInProgress.decrementAndGet();
     }
+}
 ```
 
-ProducerBatch#tryAppend方法源码：
+#### 创建队列
+```java
+/**
+ * Get the deque for the given topic-partition, creating it if necessary.
+ */
+private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
+    Deque<ProducerBatch> d = this.batches.get(tp);
+    if (d != null)
+        return d;
+    d = new ArrayDeque<>();
+    Deque<ProducerBatch> previous = this.batches.putIfAbsent(tp, d);
+    if (previous == null)
+        return d;
+    else
+        return previous;
+}
+```
+从`ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches`中获取该主题分区对应的队列,如果不为空说明已经有了，直接返回，否者创建一个新的ArrayDeque，并放到map中，方便下次使用，
+至于putIfAbsent方法，就是map中之前没有这个key，插入并返回新value，已经有了，就返回之前的value，即Deque
+
+然后就是一行很久我没看懂的代码，细心的同学可能发现了，tryAppend方法一共出现了2次，但不要和batch.tryAppend()方法搞混
+```java
+synchronized (dq) {
+    if (closed)
+        throw new KafkaException("Producer closed while send in progress");
+    RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
+    if (appendResult != null)
+        return appendResult;
+}
+````
+先看看tryAppend方法源码, 然后appendResult为null真正想表达的意思是队列里没有ProducerBatch，得先创建一个，如果不为null，就说明队列里有并且添加消息成功了，直接返回
+
+#### RecordAccumulator#tryAppend方法源码：
+其实文档写的很清楚了，就是把消息追加到最后一个ProducerBatch中，但要是队列中一个都没有呢？ 很简单，直接返回null，在append再创建一个ProducerBatch，然后调用它的tryAppend，也就是刚才的batch.tryAppend()
+吐槽下：一开始就看岔了，好几个tryAppend，如果是我，我会写成tryAppendInternal之类的方法名
+RecordAppendResult构造方法的最后一个参数表示是否是新建的ProducerBatch，这里返回时也确实返回了false
+```java
+/**
+ *  Try to append to a ProducerBatch.
+ *
+ *  If it is full, we return null and a new batch is created. We also close the batch for record appends to free up
+ *  resources like compression buffers. The batch will be fully closed (ie. the record batch headers will be written
+ *  and memory records built) in one of the following cases (whichever comes first): right before send,
+ *  if it is expired, or when the producer is closed.
+ */
+private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+                                     Callback callback, Deque<ProducerBatch> deque) {
+    ProducerBatch last = deque.peekLast();
+    if (last != null) {
+        FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, time.milliseconds());
+        if (future == null)
+            last.closeForRecordAppends();
+        else
+            return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false);
+    }
+    return null;
+}
+```
+
+#### 创建新的ProducerBatch并发送
+然后又出现了一次tryAppend，注释写道：
+Need to check if producer is closed again after grabbing the dequeue lock
+我暂时没看懂意图，大概意思是在极端情况下，检查线程在获取到dequeue锁之后，producer又关闭
+
+接下来的代码就很清晰了，新建一个ProducerBatch，然后追加消息，然后添加到队列尾部，而incomplete对象就是个Set<ProducerBatch>, 用来保存还没有发送完成的，包括还没发送的
+最后释放buffer资源
+```java
+MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
+ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
+FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds()));
+
+dq.addLast(batch);
+incomplete.add(batch);
+
+// Don't deallocate this buffer in the finally block as it's being used in the record batch
+buffer = null;
+```
+ProducerBatch的写入主要由MemoryRecordsBuilder完成，底层写入到DataOutputStream appendStream流对象, 也就是nio的ByteBuffer中
 
 ```java
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
