@@ -28,14 +28,33 @@ if (result.batchIsFull || result.newBatchCreated) {
 1. 先拿到缓冲区中待发送的所有消息，找到每个partitions leader所在的broker
 2. 然后按broker的地址分组
 3. 和broker建立连接，发送消息
+
 这样请求按broker分组合并，提升了效率，但是kafka有一个限定，同一个client对一个broker只能一个一个发请求，不能同时发送多个请求，这也是为了缓解broker端的压力
 为了实现该方式，必然有个先进先出的请求队列，前一个请求拿到响应之后，才能出队，进行第二个请求
 
 ## sender发送消息
 
-Sender类实现了Runnable接口，那么主逻辑就应该在run方法中了，关于一些判断，事务先不用关系，来到Sender重载的run(long)方法，其中的两行关键代码
+Sender类实现了Runnable接口，那么主逻辑就应该在run方法中了，关于一些判断，事务先不用管，来到Sender重载的run(long)方法，其中的两行关键代码
 
 ```java
+/**
+ * The main run loop for the sender thread
+ */
+public void run() {
+    log.debug("Starting Kafka producer I/O thread.");
+
+    // main loop, runs until close is called
+    while (running) {
+        try {
+            run(time.milliseconds());
+        } catch (Exception e) {
+            log.error("Uncaught error in kafka producer I/O thread: ", e);
+        }
+    }
+    // 省略关闭后的处理代码
+}
+
+// 进入到run方法
 void run(long now) {
     // 省略事务相关代码 ....
     long pollTimeout = sendProducerData(now);
