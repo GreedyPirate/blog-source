@@ -10,9 +10,51 @@ comments: true
 
 # Kafka生产者源码浅析(二)
 
-> 上篇文章中对Spring-kafka源码做了追踪，也对原生的KafkaProducer做了部门解析，对关键类事先说明，帮助读者理解源码，克服对源码的恐惧心理，一起品尝Kafka的饕餮盛宴
+> 上篇文章中对Spring-kafka源码做了追踪，也对原生的KafkaProducer做了部分解析，对关键类事先说明，帮助读者理解源码，克服对源码的恐惧心理
 
 doSend的方法很长，我们分部拆解
+```java
+// 省略部分代码，catch处理
+private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
+    TopicPartition tp = null;
+    try {
+        throwIfProducerClosed();
+        // first make sure the metadata for the topic is available
+        ClusterAndWaitTime clusterAndWaitTime;
+        clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
+        long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
+        Cluster cluster = clusterAndWaitTime.cluster;
+
+        byte[] serializedKey;
+        serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key());
+    
+        byte[] serializedValue;
+        serializedValue = valueSerializer.serialize(record.topic(), record.headers(), record.value());
+    
+        int partition = partition(record, serializedKey, serializedValue, cluster);
+        tp = new TopicPartition(record.topic(), partition);
+
+        setReadOnly(record.headers());
+        Header[] headers = record.headers().toArray();
+
+        int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
+                compressionType, serializedKey, serializedValue, headers);
+        ensureValidRecordSize(serializedSize);
+        long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
+        Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
+
+        if (transactionManager != null && transactionManager.isTransactional())
+            transactionManager.maybeAddPartitionToTransaction(tp);
+
+        RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
+                serializedValue, headers, interceptCallback, remainingWaitMs);
+        if (result.batchIsFull || result.newBatchCreated) {
+            this.sender.wakeup();
+        }
+        return result.future;
+    }
+}
+```
 
 ## Part one
 
@@ -24,37 +66,64 @@ try {
     throwIfProducerClosed();
     // first make sure the metadata for the topic is available
     ClusterAndWaitTime clusterAndWaitTime;
-    try {
-        clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
-    } catch (KafkaException e) {
-        if (metadata.isClosed())
-            throw new KafkaException("Producer closed while send in progress", e);
-        throw e;
-    }
+    clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
+    long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
+    Cluster cluster = clusterAndWaitTime.cluster;
+}
+```
+1. throwIfProducerClosed做的很简单，看看Sender线程是否活着
+
+2. waitOnMetadata返回一个ClusterAndWaitTime对象，里面是broker集群的元信息和获取信息的耗时，这个耗时算在了max.block.ms中，它控制这send方法的最大执行时间
+
+Cluster 类信息如下
+```java
+public final class Cluster {
+    private final boolean isBootstrapConfigured;
+    // 所有的broker节点
+    private final List<Node> nodes;
+    private final Set<String> unauthorizedTopics;
+    // 内部topic，如_consumer_offset
+    private final Set<String> internalTopics;
+    // controller节点
+    private final Node controller;
+    // 每个分区对应的分区信息
+    private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
+    // 每个topic所有分区的信息
+    private final Map<String, List<PartitionInfo>> partitionsByTopic;
+    // 可用topic所有分区的信息
+    private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
+    // 每个broker节点的所有分区
+    private final Map<Integer, List<PartitionInfo>> partitionsByNode;
+    // 按照nodeId组成map
+    private final Map<Integer, Node> nodesById;
+    // 里面只有一个clusterId熟悉
+    private final ClusterResource clusterResource;
 }
 ```
 
-1. throwIfProducerClosed做的很简单，看看Sender线程是否活着
-
-2. waitOnMetadata返回一个ClusterAndWaitTime对象，里面是broker集群的元信息和获取信息的耗时，它不能大于max.block.ms，对该方法做个简单的分析：
-
-   ```java
-   metadata.add(topic);
-   Cluster cluster = metadata.fetch();
-   Integer partitionsCount = cluster.partitionCountForTopic(topic);
-   if (partitionsCount != null && (partition == null || partition < partitionsCount))
-       return new ClusterAndWaitTime(cluster, 0);
-   ```
-
-   将topic放入一个map中，value是topic的过期时间(如果开启topic过期功能)，从Cluster中获取topic的分区数，如果消息手动指定了分区，且小于分区数，就直接返回(说明手动指定的分区是有效的)
+上面出现的PartitionInfo, 这些信息想必大家已经很熟悉
+```java
+public class PartitionInfo {
+    // 主题
+    private final String topic;
+    // 分区
+    private final int partition;
+    // leader分区所在broker
+    private final Node leader;
+    // 副本所在broker
+    private final Node[] replicas;
+    // ISR副本所在broker
+    private final Node[] inSyncReplicas;
+    // 离线副本所在broker
+    private final Node[] offlineReplicas;
+}
+```
 
 ## Part two
 
-这一部分比较简单，计算了下maxBlockTimeMs还剩多少时间，同时对key和value序列化
+这一部分比较简单，对key和value序列化
 
 ```java
-long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
-Cluster cluster = clusterAndWaitTime.cluster;
 byte[] serializedKey;
 try {
     serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key());
@@ -80,16 +149,16 @@ tp = new TopicPartition(record.topic(), partition);
 
 第二行代码是将topic和分区包装成一个TopicPartition类，重点关注第一行代码
 
-partition方法会尝试获取消息中的partition，如果用户指定了分区，此时就不用计算了
+partition方法会尝试获取消息中的partition，如果用户指定了分区，此时就不用计算了，否则使用partitioner计算分区
 
 ```java
-    private int partition(ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue, Cluster cluster) {
-        Integer partition = record.partition();
-        return partition != null ?
-                partition :
-                partitioner.partition(
-                        record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
-    }
+private int partition(ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue, Cluster cluster) {
+    Integer partition = record.partition();
+    return partition != null ?
+            partition :
+            partitioner.partition(
+                    record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+}
 ```
 
 #### DefaultPartitioner
@@ -98,26 +167,26 @@ partitioner.partition的具体实现在DefaultPartitioner#partition，其源码�
 
 ```java
 public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
-        List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
-        int numPartitions = partitions.size();
-        if (keyBytes == null) {
-            int nextValue = nextValue(topic);
-            List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
-            if (availablePartitions.size() > 0) {
-                int part = Utils.toPositive(nextValue) % availablePartitions.size();
-                return availablePartitions.get(part).partition();
-            } else {
-                // no partitions are available, give a non-available partition
-                return Utils.toPositive(nextValue) % numPartitions;
-            }
+    List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+    int numPartitions = partitions.size();
+    if (keyBytes == null) {
+        int nextValue = nextValue(topic);
+        List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
+        if (availablePartitions.size() > 0) {
+            int part = Utils.toPositive(nextValue) % availablePartitions.size();
+            return availablePartitions.get(part).partition();
         } else {
-            // hash the keyBytes to choose a partition
-            return Utils.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
+            // no partitions are available, give a non-available partition
+            return Utils.toPositive(nextValue) % numPartitions;
         }
+    } else {
+        // hash the keyBytes to choose a partition
+        return Utils.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
     }
+}
 ```
 
-回顾上一篇文章，Cluster封装了broker的很多信息，其中就用一个Map封装了topic的partition信息
+回顾前文，Cluster封装了broker的很多信息，其中就用一个Map封装了topic的partition信息
 
 ```java
 Map<String, List<PartitionInfo>> partitionsByTopic
@@ -131,7 +200,17 @@ Map<String, List<PartitionInfo>> partitionsByTopic
 
 kafka会初始化一个很大的伪随机数放在AtomicInteger中：
 ```java
-counter = new AtomicInteger(ThreadLocalRandom.current().nextInt())
+private int nextValue(String topic) {
+    AtomicInteger counter = topicCounterMap.get(topic);
+    if (null == counter) {
+        counter = new AtomicInteger(ThreadLocalRandom.current().nextInt());
+        AtomicInteger currentCounter = topicCounterMap.putIfAbsent(topic, counter);
+        if (currentCounter != null) {
+            counter = currentCounter;
+        }
+    }
+    return counter.getAndIncrement();
+}
 ```
 以topic为key保存在一个ConcurrentHashMap中，每次用完counter自增并返回，这就是nextValue方法的作用
 
@@ -171,9 +250,7 @@ if (result.batchIsFull || result.newBatchCreated) {
 return result.future;
 ```
 
-首先思考下缓存区的数据结构是什么：它应该有个先来后到的顺序，即先进先出(FIFO)，用一个队列实现即可
-
-而kafka真正使用的是一个双端队列，基于"工作密取"模式减少队列竞争，提高效率
+首先思考下缓存区的数据结构是什么：它应该有个先来后到的顺序，即先进先出(FIFO)，用一个队列实现即可，而kafka真正使用的是一个双端队列
 
 RecordAccumulator为topic的每一个分区都创建了一个ArrayDeque(thread unsafe)，里面存放的元素是ProducerBatch，它就是待批量发送的消息。
 kafka使用一个CopyOnWriteMap保存分区和队列的关系，即只有在修改该map时把内容Copy出去形成一个新的map，然后再改变引用，这也是COW机制的常见用法
@@ -185,18 +262,6 @@ ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches = new CopyOnWriteMap
 ![模型](https://ae01.alicdn.com/kf/H409e050f5b184f7ebad5ecc5f12d9e41V.png)
 
 append方法返回一个RecordAppendResult，它是消息在添加进内存缓冲区后的结果：Deque队列中是否有元素，是否有新的ProducerBatch创建，两个条件都可以去通知sender线程发送消息
-
-append方法的具体实现过程还是很复杂的，这里说下笔者对这个过程的理解：
-
-1. 尝试获取该TopicPartition下的队列，如果没有则创建
-2. 获取队列的最后一个ProducerBatch元素，将消息添加至该ProducerBatch，该过程会对Deque加锁
-3. 如果队列里没有ProducerBatch，或是最后一个ProducerBatch已经满了，就需要新建一个ProducerBatch
-4. 分配一个ByteBuffer空间，该空间大小在batch.size和消息大小中取较大值
-5. 再重新尝试步骤2一次，万一这时候刚好又有了呢(这时候Deque已经释放锁了)
-6. 创建好ProducerBatch之后，继续尝试append，添加成功之后将future和callback放入一个Thunk对象中，并且添加到一个List<Thunk>集合，这是因为一批消息需要发送之后才有回调，所以先把回调统一放入一个集合中
-7. 添加成功之后，返回future对象，将ProducerBatch添加至Deque队列，同时用一个集合IncompleteBatches持有住了ProducerBatch
-8. 清理buffer空间，封装RecordAppendResult结果：Deque队列大小，新建的ProducerBatch对象是否已满
-
 
 完整的源码如下
 
@@ -363,6 +428,25 @@ ProducerBatch的写入主要由MemoryRecordsBuilder完成，底层写入到DataO
 
 ```
 
+### 步骤
+append方法的具体实现过程还是很复杂的，这里说下笔者对这个过程的理解：
+
+1. 尝试获取该TopicPartition下的队列，如果没有则创建
+2. 获取队列的最后一个ProducerBatch元素，将消息添加至该ProducerBatch，该过程会对Deque加锁
+3. 如果队列里没有ProducerBatch，或是最后一个ProducerBatch已经满了，就需要新建一个ProducerBatch
+4. 分配一个ByteBuffer空间，该空间大小在batch.size和消息大小中取较大值
+5. 再重新尝试步骤2一次，万一这时候刚好又有了呢(这时候Deque已经释放锁了)
+6. 创建好ProducerBatch之后，继续尝试append，添加成功之后将future和callback放入一个Thunk对象中，并且添加到一个List<Thunk>集合，这是因为一批消息需要发送之后才有回调，所以先把回调统一放入一个集合中
+7. 添加成功之后，返回future对象，将ProducerBatch添加至Deque队列，同时用一个集合IncompleteBatches持有住了ProducerBatch
+8. 清理buffer空间，封装RecordAppendResult结果：Deque队列大小，新建的ProducerBatch对象是否已满
+
+
+## 总结
+kafka发送消息的步骤大致如下：
+1. 更新broker上的元信息
+2. key, value的序列化
+3. 计算分区
+4. 添加到缓存区
 
 
 

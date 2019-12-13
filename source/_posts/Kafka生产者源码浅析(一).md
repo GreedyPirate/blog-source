@@ -26,7 +26,7 @@ comments: true
 在doSend方法中，有很多事务相关，日志相关的代码，我们的目的是理清楚主流程，因此省略
 
 ```java
-  // 
+  // 省略部分代码 ... 
   protected ListenableFuture<SendResult<K, V>> doSend(final ProducerRecord<K, V> producerRecord) {
 		  final Producer<K, V> producer = getTheProducer();
 		  final SettableListenableFuture<SendResult<K, V>> future = new SettableListenableFuture<>();
@@ -128,6 +128,16 @@ private Callback buildCallback(final ProducerRecord<K, V> producerRecord, final 
 }
 ```
 SettableListenableFuture是一个可设置，可监听的Future对象，用它构建异步发送消息后的Callback对象，大家可以认为Spring使用SettableListenableFuture对象对返回结果和异常进行了封装，Callback的作用在下文揭晓。
+
+ListenableFuture同样的也可以添加回调函数,使用方法如下
+```java
+ListenableFuture future = kafkaTemplate.send(record);
+future.addCallback(result -> {
+    System.out.println(result);
+}, error->{
+    System.out.println(error);
+});
+```
 
 接着send方法由CloseSafeProducer委托给KafkaProducer执行，KafkaProducer的send方法如下
 
@@ -252,6 +262,9 @@ public final class RecordMetadata {
     private volatile Long checksum;
 }
 ```
+这里提一下ProducerRecord的timestamp，取决于message.timestamp.type的配置
+CreateTime：客户端发送消息时的时间戳，默认值。
+LogAppendTime：消息在broker追加日志时的时间戳。
 
 #### 预备知识
 
@@ -297,7 +310,9 @@ public final class RecordMetadata {
 * TopicPartition：将topic和计算好的分区封装到一起
 * InterceptorCallback：如果没有拦截器，它就是Callback回调
 
+## 总结
+本来文章主要介绍了spring对kafka-client生产者做了哪些封装，spring使用ProducerFactory来创建KafkaProducer对象，将其传给CloseSafeProducer作为委托对象
+ListenableFuture作为send方法的返回值，在buildCallback方法中对Kafka原生的Callback做了封装，并加入了spring自己的producerListener
 
-
-本文至此结束，接下来发送的具体源码将在下文揭晓
+本文至此结束，剥离spring的封装，接下来发送的具体源码将在下文揭晓
 
