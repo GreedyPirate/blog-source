@@ -87,6 +87,13 @@ top -p <pid> -H ：查看进程中各线程详情
 netstat -natp|awk 'print $7'|sort|uniq -c|sort -rn
 ```
 
+## awk入门
+test.txt
+red,10,jay
+black,20,tom
+yellow,30,jim
+
+awk -F "," '$3>15 {print $1,$2}' test.txt
 持续积累中 ......
 
 

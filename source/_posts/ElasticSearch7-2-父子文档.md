@@ -6,11 +6,11 @@ tags: [ElasticSearch]
 toc: true
 comments: true
 ---
->写这篇文章的目的是为了帮助大家了解7.2版本中的父子文档，之前希望通过百度的博客快速了解一下，然而大失所望，建立索引的语法没有一个能通过，决定仔细看一遍[官方文档](https://www.elastic.co/guide/en/elasticsearch/reference/7.2/parent-join.html#_searching_with_parent_join)
+>写这篇文章的目的是为了帮助大家了解7.2版本中的父子文档，之前希望通过百度的博客快速了解一下，然而大失所望，建立索引的语法在7.2版本没有一个能通过，决定仔细看一遍[官方文档](https://www.elastic.co/guide/en/elasticsearch/reference/7.2/parent-join.html#_searching_with_parent_join)
 
 ## 建立父-子文档语法
 
-首先看一下如何建立父子文档，明细和网上"_parent"的方式不一样，说明es后期版本已经修改了语法
+首先看一下如何建立父子文档，明显和网上"_parent"的方式不一样，说明es后期版本已经修改了语法
 ```
 PUT my_index
 {
@@ -64,7 +64,8 @@ PUT /my_index/_doc/3?routing=1
 
 ```
 ### 通过parent_id查询子文档
-parent_id query
+通过parent_id query传入父文档id即可
+```
 GET my_index/_search
 {
   "query": {
@@ -74,6 +75,7 @@ GET my_index/_search
     }
   }
 }
+```
 
 
 
@@ -92,6 +94,9 @@ GET my_index/_search
 可以为一个已存在的join字段添加新的关联关系
 * It is also possible to add a child to an existing element but only if the element is already a parent.
 可以在一个元素已经是父的情况下添加一个子
+
+### 总结
+es中通过父子文档来实现join，但在一个索引中只能有一个一父多子的join
 
 ## 关系字段
 es会自动生成一个额外的用于表示关系的字段：field#parent
@@ -148,7 +153,7 @@ curl -X GET "localhost:9200/_stats/fielddata?human&fields=my_join_field#question
 curl -X GET "localhost:9200/_nodes/stats/indices/fielddata?human&fields=my_join_field#question&pretty"
 ```
 
-## 一父多子模式
+## 一父多子的祖孙结构
 考虑以下结构
 ```
    question
@@ -178,9 +183,7 @@ PUT my_index
  ```
 
 ### 插入孙子节点
-注意这里的routing和parent值不一样
-routing指的是祖父字段，即question
-而parent指的就是字面意思answer
+注意这里的routing和parent值不一样,routing指的是祖父字段，即question,而parent指的就是字面意思answer
 ```
 PUT my_index/_doc/3?routing=1&refresh 
 {

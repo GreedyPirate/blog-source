@@ -26,6 +26,7 @@ comments: true
 在doSend方法中，有很多事务相关，日志相关的代码，我们的目的是理清楚主流程，因此省略
 
 ```java
+  // 
   protected ListenableFuture<SendResult<K, V>> doSend(final ProducerRecord<K, V> producerRecord) {
 		  final Producer<K, V> producer = getTheProducer();
 		  final SettableListenableFuture<SendResult<K, V>> future = new SettableListenableFuture<>();
@@ -37,7 +38,10 @@ comments: true
 ## 构建生产者
 代码只有一行，通过DefaultKafkaProducerFactory创建生产者
 ```java
-return this.producerFactory.createProducer();
+private Producer<K, V> getTheProducer() {
+    // 省略部分代码 ...
+    return this.producerFactory.createProducer();
+}
 ```
 进入到DefaultKafkaProducerFactory#createProducer
 
@@ -85,23 +89,69 @@ CloseSafeProducer的分析至此结束，在获取到包装后的KafkaProducer�
 ## 消息发送
 回到doSend方法，发送的代码只有两行
 ```java
-final SettableListenableFuture<SendResult<K, V>> future = 
-													new SettableListenableFuture<>();
-producer.send(producerRecord, buildCallback(producerRecord, producer, future));
+// 省略部分代码...
+protected ListenableFuture<SendResult<K, V>> doSend(final ProducerRecord<K, V> producerRecord) {
+  final Producer<K, V> producer = getTheProducer();
+  final SettableListenableFuture<SendResult<K, V>> future = new SettableListenableFuture<>();
+  producer.send(producerRecord, buildCallback(producerRecord, producer, future));
+  if (this.autoFlush) {
+    flush();
+  }
+  return future;
+}
+
+// 省略部分代码...
+private Callback buildCallback(final ProducerRecord<K, V> producerRecord, final Producer<K, V> producer,
+      final SettableListenableFuture<SendResult<K, V>> future) {
+  return (metadata, exception) -> {
+    try {
+      if (exception == null) {
+        future.set(new SendResult<>(producerRecord, metadata));
+        if (KafkaTemplate.this.producerListener != null) {
+          KafkaTemplate.this.producerListener.onSuccess(producerRecord, metadata);
+        }
+      }
+      else {
+        future.setException(new KafkaProducerException(producerRecord, "Failed to send", exception));
+        if (KafkaTemplate.this.producerListener != null) {
+          // producerListener 默认是LoggingProducerListener，仅在错误是打印日志
+          KafkaTemplate.this.producerListener.onError(producerRecord, exception);
+        }
+      }
+    }
+    finally {
+      if (!KafkaTemplate.this.transactional) {
+        closeProducer(producer, false);
+      }
+    }
+  };
+}
 ```
-SettableListenableFuture是一个可设置，可监听的Future对象，用它构建异步发送消息后的Callback对象，读者可以认为Spring使用SettableListenableFuture对象对返回结果和异常进行了封装，Callback的作用在下文揭晓。
+SettableListenableFuture是一个可设置，可监听的Future对象，用它构建异步发送消息后的Callback对象，大家可以认为Spring使用SettableListenableFuture对象对返回结果和异常进行了封装，Callback的作用在下文揭晓。
 
 接着send方法由CloseSafeProducer委托给KafkaProducer执行，KafkaProducer的send方法如下
 
 ```java
-    @Override
-    public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
-        // intercept the record, which can be potentially modified; this method does not throw exceptions
-        ProducerRecord<K, V> interceptedRecord = this.interceptors.onSend(record);
-        return doSend(interceptedRecord, callback);
-    }
+@Override
+public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
+    // intercept the record, which can be potentially modified; this method does not throw exceptions
+    ProducerRecord<K, V> interceptedRecord = this.interceptors.onSend(record);
+    return doSend(interceptedRecord, callback);
+}
 ```
-该方法的官方文档翻译如下：
+ProducerInterceptor通过for循环遍历依次执行
+```java
+// 省略部分代码...
+public ProducerRecord<K, V> onSend(ProducerRecord<K, V> record) {
+    ProducerRecord<K, V> interceptRecord = record;
+    for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
+      interceptRecord = interceptor.onSend(interceptRecord);
+    }
+    return interceptRecord;
+}
+```
+
+send方法的官方文档翻译如下：
 ```java
 异步发送一条消息到一个topic，并且在应答之后立即调用已提供的回调
 发送是异步的，一旦消息存储到了等待发送的缓冲区，该方法会立即返回。这样就不用阻塞在等待每一次发送消息的响应，允许并行的发送大量消息。
