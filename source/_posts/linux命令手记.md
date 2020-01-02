@@ -33,6 +33,12 @@ ps -ef|grep xxx |grep -v 'grep'
 ps aux|head -1;ps aux|grep -v PID|sort -rn -k +4|head
 ```
 
+## 查看前十个最占CPU的应用
+```bash
+ps aux|grep -v PID|sort -rn -k 3| head | awk 'BEGIN{print "USER PID %CPU %MEM VSZ RSS STAT"} {print $1,$2,$3,$4,$5,$6,$8}'
+
+```
+
 ## 按端口终止进程
 ```bash
 #!/bin/sh

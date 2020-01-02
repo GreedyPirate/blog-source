@@ -1,6 +1,6 @@
 ---
 title: Kafka生产者源码浅析(二)
-date: 2019-01-28 15:27:30
+date: 2019-10-16 20:13:39
 categories: Kafka Tutorial
 tags: [kafka,中间件,消息]
 toc: true
@@ -75,6 +75,8 @@ try {
 
 2. waitOnMetadata返回一个ClusterAndWaitTime对象，里面是broker集群的元信息和获取信息的耗时，这个耗时算在了max.block.ms中，它控制这send方法的最大执行时间
 
+3. waitOnMetadata通过唤醒sender线程，依靠NetworkClient.poll()方法来更新元数据
+
 Cluster 类信息如下
 ```java
 public final class Cluster {
@@ -90,7 +92,7 @@ public final class Cluster {
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
     // 每个topic所有分区的信息
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
-    // 可用topic所有分区的信息
+    // topic所有可用分区的信息
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
     // 每个broker节点的所有分区
     private final Map<Integer, List<PartitionInfo>> partitionsByNode;
@@ -100,6 +102,7 @@ public final class Cluster {
     private final ClusterResource clusterResource;
 }
 ```
+具体是如何初始化的，可以看一下Cluster构造函数的源码
 
 上面出现的PartitionInfo, 这些信息想必大家已经很熟悉
 ```java
@@ -194,7 +197,8 @@ Map<String, List<PartitionInfo>> partitionsByTopic
 
 此时要分区，首先要获取这个topic的PartitionInfo，第一行代码的作用就是这个，map.get(topic)，很简单
 
-接下分两种情况：用户指定了key，和未指定key，我们知道旧版本的kafka在用户未指定key的情况下会默认将消息分配到某一个分区，但这样会造成数据倾斜，官方后来对此作了优化，采用轮询(round-robin)的方式，简单提一下这块的代码
+接下分两种情况：用户指定了key，和未指定key，我们知道旧版本的kafka在用户未指定key的情况下会默认将消息分配到某一个分区，
+但这样会造成数据倾斜，官方后来对此作了优化，采用轮询(round-robin)的方式，简单提一下这块的代码
 
 #### 随机分配
 
@@ -253,7 +257,7 @@ return result.future;
 首先思考下缓存区的数据结构是什么：它应该有个先来后到的顺序，即先进先出(FIFO)，用一个队列实现即可，而kafka真正使用的是一个双端队列
 
 RecordAccumulator为topic的每一个分区都创建了一个ArrayDeque(thread unsafe)，里面存放的元素是ProducerBatch，它就是待批量发送的消息。
-kafka使用一个CopyOnWriteMap保存分区和队列的关系，即只有在修改该map时把内容Copy出去形成一个新的map，然后再改变引用，这也是COW机制的常见用法
+kafka使用一个CopyOnWriteMap保存分区和队列的关系，即只有在修改该map时把内容Copy出去形成一个新的map，然后配合volatile改变引用，这也是COW机制的常见用法
 
 ```java
 ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches = new CopyOnWriteMap<>();
@@ -325,6 +329,7 @@ public RecordAppendResult append(TopicPartition tp,
     }
 }
 ```
+这里的代码看似很多，其实并不难，我们还是逐步分析下
 
 #### 创建队列
 ```java
@@ -359,7 +364,7 @@ synchronized (dq) {
 先看看tryAppend方法源码, 然后appendResult为null真正想表达的意思是队列里没有ProducerBatch，得先创建一个，如果不为null，就说明队列里有并且添加消息成功了，直接返回
 
 #### RecordAccumulator#tryAppend方法源码：
-其实文档写的很清楚了，就是把消息追加到最后一个ProducerBatch中，但要是队列中一个都没有呢？ 很简单，直接返回null，在append再创建一个ProducerBatch，然后调用它的tryAppend，也就是刚才的batch.tryAppend()
+其实文档写的很清楚了，就是把消息追加到最后一个ProducerBatch中，但要是队列中一个都没有呢？ 很简单，直接返回null，在外层方法中会判断不为null在结束，否则会分配
 吐槽下：一开始就看岔了，好几个tryAppend，如果是我，我会写成tryAppendInternal之类的方法名
 RecordAppendResult构造方法的最后一个参数表示是否是新建的ProducerBatch，这里返回时也确实返回了false
 ```java
@@ -406,26 +411,25 @@ buffer = null;
 ProducerBatch的写入主要由MemoryRecordsBuilder完成，底层写入到DataOutputStream appendStream流对象, 也就是nio的ByteBuffer中
 
 ```java
-    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
-        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
-            return null;
-        } else {
-            Long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
-            this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
-                    recordsBuilder.compressionType(), key, value, headers));
-            this.lastAppendTime = now;
-            FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
-                                                                   timestamp, checksum,
-                                                                   key == null ? -1 : key.length,
-                                                                   value == null ? -1 : value.length);
-            // we have to keep every future returned to the users in case the batch needs to be
-            // split to several new batches and resent.
-            thunks.add(new Thunk(callback, future));
-            this.recordCount++;
-            return future;
-        }
+public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
+    if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
+        return null;
+    } else {
+        Long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
+        this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
+                recordsBuilder.compressionType(), key, value, headers));
+        this.lastAppendTime = now;
+        FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
+                                                               timestamp, checksum,
+                                                               key == null ? -1 : key.length,
+                                                               value == null ? -1 : value.length);
+        // we have to keep every future returned to the users in case the batch needs to be
+        // split to several new batches and resent.
+        thunks.add(new Thunk(callback, future));
+        this.recordCount++;
+        return future;
     }
-
+}
 ```
 
 ### 步骤
@@ -447,6 +451,9 @@ kafka发送消息的步骤大致如下：
 2. key, value的序列化
 3. 计算分区
 4. 添加到缓存区
+    1. 获取该分区对应的队列
+    2. 尝试添加
+    3. 如果添加成功返回
 
 
 

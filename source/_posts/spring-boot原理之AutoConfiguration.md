@@ -1,6 +1,6 @@
 ---
 title: spring-boot原理之AutoConfiguration
-date: 2019-11-27 21:05:38
+date: 2019-09-24 21:05:38
 tags:
 	- Spring Boot
 toc: true
@@ -69,5 +69,23 @@ ImportSelector的逻辑很简单，你告诉它要引入bean的类名即可
 
 ## META-INF目录下的两个文件
 
-spring.factories: 
-spring-autoconfigure-metadata.properties
+spring.factories: 定义所有的AutoConfiguration
+spring-autoconfigure-metadata.properties: AutoConfiguration的元信息，例如Conditional条件，加载顺序等
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
