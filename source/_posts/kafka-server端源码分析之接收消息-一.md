@@ -1,6 +1,6 @@
 ---
 title: kafka server端源码分析之接收消息(一)
-date: 2019-11-02 19:23:42
+date: 2019-12-10 19:23:42
 categories: Kafka Tutorial
 tags: [kafka,中间件,消息]
 toc: true
@@ -9,9 +9,16 @@ comments: true
 
 > 承接上篇搭建kafka源码环境之后，本文正式开始分析
 
-# 入口
-在开始之前，一个很重要的问题是从哪个类中看起。很简单，我们是从kafka.Kafka启动，跟随main方法到KafkaServer的startup方法中，看到了以下代码代码
-```scala
+# 前文
+
+在前文[kafka网络请求处理模型]()中提到, KafkaServer#startup方法涵盖了kafka server所有模块的初始化
+KafkaRequestHandlerPool线程池中的KafkaRequestHandler对象通过调用KafkaApis的handle方法，处理各类网络请求
+
+## KafkaRequestHandler
+
+KafkaRequestHandler在IO线程池中根据num.io.threads的数量初始化
+### 启动
+```java
 def startup() {
 	//省略 ...
     /* start processing requests */
@@ -22,8 +29,9 @@ def startup() {
       config.numIoThreads)
 }
 ```
-而KafkaRequestHandlerPool创建了KafkaRequestHandler对象
-```scala
+### 初始化KafkaRequestHandler
+createHandler将初始化好的KafkaRequestHandler线程保存到runnables集合中，并以守护线程启动KafkaRequestHandler线程
+```java
 class KafkaRequestHandlerPool(...) extends Logging with KafkaMetricsGroup {
 
 	def createHandler(id: Int): Unit = synchronized {
@@ -32,36 +40,30 @@ class KafkaRequestHandlerPool(...) extends Logging with KafkaMetricsGroup {
 	}
 }
 ```
-numThreads的值就是配置文件中num.io.threads的值
+### KafkaRequestHandler简要分析
 
-# KafkaRequestHandler
-KafkaRequestHandler实现了Runnable接口，根据注释，以及run方法中的部分代码，就可以看出这是在处理请求了
-```scala
-/**
- * A thread that answers kafka requests.
- */
-class KafkaRequestHandler(id: Int,
-                          brokerId: Int,
-                          val aggregateIdleMeter: Meter,
-                          val totalHandlerThreads: AtomicInteger,
-                          val requestChannel: RequestChannel,
-                          apis: KafkaApis,
-                          time: Time) extends Runnable with Logging {
-	def run() {
-		while (!stopped) {
-		  val req = requestChannel.receiveRequest(300)
-		  req match {
-		    case request: RequestChannel.Request =>
-		      try {
-		        apis.handle(request)
-		      } 
-		}
-	}                          	
+KafkaRequestHandler实现了Runnable接口，run方法中每300ms的间隔从requestQueue中获取请求，并交给KafkaApis#handle方法处理
+```java
+
+class KafkaRequestHandler(...) extends Runnable with Logging {
+  def run() {
+    while (!stopped) {
+      val req = requestChannel.receiveRequest(300)
+      
+      req match {
+        case request: RequestChannel.Request =>
+          apis.handle(request)
+      }
+    }
+  }                    	
 }                          	
 ```
-具体的处理交给了KafkaApis对象的handle方法，该方法的处理也很容易理解，根据客户端的不同请求，用一个match case，类似java中的switch来处理，直接进去到handleProduceRequest方法中
 
-```scala
+## 生产者请求处理方法
+
+KafkaApis#handle方法根据不同类型的请求，调用不同的handleXxx方法，生产者请求在handleProduceRequest方法中
+
+```java
 // 省略部分代码
 def handleProduceRequest(request: RequestChannel.Request) {
 	// Request对象类型转换
@@ -69,13 +71,14 @@ def handleProduceRequest(request: RequestChannel.Request) {
 	// 消息头和消息体大小
 	val numBytesAppended = request.header.toStruct.sizeOf + request.sizeOfBodyInBytes
 
-	// 定义三个可变map
+	// 定义三个可变map，分别保存未认证，不存在，已认证的topic
 	val unauthorizedTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
 	val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
 	val authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
 
 	for ((topicPartition, memoryRecords) <- produceRequest.partitionRecordsOrFail.asScala) {
 	  if (!authorize(request.session, Write, Resource(Topic, topicPartition.topic, LITERAL)))
+	  	// 复习下scala语法：+=表示向集合添加元素， key->value表示map中的键值对
 	    unauthorizedTopicResponses += topicPartition -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
 	  else if (!metadataCache.contains(topicPartition))
 	    nonExistingTopicResponses += topicPartition -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)

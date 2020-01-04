@@ -1,6 +1,6 @@
 ---
 title: 《快手万亿级别Kafka集群应用实践与技术演进之路》观后心得
-date: 2019-12-26 15:08:09
+date: 2019-11-21 15:08:09
 categories: 架构随笔录
 tags: [架构,演讲]
 toc: true
@@ -34,17 +34,28 @@ MirrorMarker是用于同步多个kafka集群的工具，但它有很多缺点，
 3. topic是静态配置的，增加topic需要重启MirrorMarker
 4. 只支持一个集群到另一个集群的同步，无法同步多个集群
 
-
-# 可用性改造
-
 # 资源隔离
+
+在[kafka网络请求处理模型](https://greedypirate.github.io/2019/12/29/kafka%E7%BD%91%E7%BB%9C%E8%AF%B7%E6%B1%82%E5%A4%84%E7%90%86%E6%A8%A1%E5%9E%8B/)一文中，阐述了Processor是如何将请求放入requestQueue中的，
+![kafka请求处理流程](https://ae01.alicdn.com/kf/H9d81a3a1afa14c2d945eef4dcce57ec8D.png)
+该队列是一个有界队列，大小由queued.max.requests参数控制，默认是500，当某一个topic出现问题时，kafka处理速度变慢，导致队列满了，后续请求被阻塞，向上导致Processor和Acceptor接收网络请求被阻塞，这是不能接受的
+快手的策略是多队列，每个队列后面跟一个worker线程池(KafkaRequestHandlerPoll), 同时发现队列满了以后，请求被丢弃
 
 # cache改造
 cache改造是我很感兴趣的一个部分，原来pageCache有很多稳定性问题，导致缓存命中率降低
-1. follower副本同步时也会走pageCache，但如果是在扩容时，就会从磁盘读取历史消息，导致pageCache被历史消息占用，这样消费者来拉取消息时就会走磁盘
-2. 线上环境消息积压是极有可能的情况，那么积压的消息大概率是在磁盘中，此时消费者拉取消息就会将历史消息加载pageCache中，生产者写入消息时pageCache的空间就会减少，造成写磁盘，会加大磁盘负载
+
+在理想情况下，生产者发送的消费写入到pageCache中，消费者在缓存未失效的情况下，从pageCache中读取，整个过程是基于内存的，效率非常高
+但是这以下两种情况下，pageCache会被污染，到时消息在pageCache中失效，需要从磁盘中读取，降低了效率
+
+1. 线上环境消息积压是极有可能的情况，被积压的消息大概率是在磁盘中，此时消费者拉取消息就会将历史消息加载pageCache中
+而正常topic写入的消息能够使用的pageCache就减少了，又会被写入到磁盘中，此时正常topic的消费者来消费时就要读取磁盘，降低了pageCache的命中率
+2. follower副本从leader副本同步后，也要写入到broker磁盘中区，但是它也是要先写到pageCache中，我们都知道kafka中的follower副本是不提供读写能力的，那么它也写到pageCache中就很浪费内存了
 
 ## 解决方式
+让kafka不要重度依赖pageCache，构建kafka自己的内存cache
+![kafka-cache](https://ae01.alicdn.com/kf/H8509500f136e4f3f892e81b07e0cbd71B.png)
+
+基于以上设计，consumer拉取消费时，先从cache中获取消息，没有再去pageCache中获取
 
 
 
