@@ -58,8 +58,6 @@ private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback call
 
 ## Part one
 
-首先吐槽下这个tp变量，定义在外边没什么卵用
-
 ```java
 TopicPartition tp = null;
 try {
@@ -254,7 +252,7 @@ if (result.batchIsFull || result.newBatchCreated) {
 return result.future;
 ```
 
-首先思考下缓存区的数据结构是什么：它应该有个先来后到的顺序，即先进先出(FIFO)，用一个队列实现即可，而kafka真正使用的是一个双端队列
+首先思考下缓存区的数据结构是什么：每一个分区都有一个先进先出的队列，，而kafka真正使用的是一个双端队列
 
 RecordAccumulator为topic的每一个分区都创建了一个ArrayDeque(thread unsafe)，里面存放的元素是ProducerBatch，它就是待批量发送的消息。
 kafka使用一个CopyOnWriteMap保存分区和队列的关系，即只有在修改该map时把内容Copy出去形成一个新的map，然后配合volatile改变引用，这也是COW机制的常见用法
@@ -267,7 +265,7 @@ ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches = new CopyOnWriteMap
 
 append方法返回一个RecordAppendResult，它是消息在添加进内存缓冲区后的结果：Deque队列中是否有元素，是否有新的ProducerBatch创建，两个条件都可以去通知sender线程发送消息
 
-完整的源码如下
+这里的代码看似很多，其实并不难，我们还是逐步分析下
 
 ```java
 public RecordAppendResult append(TopicPartition tp,
@@ -293,13 +291,16 @@ public RecordAppendResult append(TopicPartition tp,
                 return appendResult;
         }
 
+        // batch.size默认是16KB，但是即使超出也没事，通过Math.max函数取了二者最大值
         // we don't have an in-progress record batch try to allocate a new batch
         byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
         int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
-        log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
+
+        // 这里在申请ByteBuffer缓存空间了
         buffer = free.allocate(size, maxTimeToBlock);
         synchronized (dq) {
             // Need to check if producer is closed again after grabbing the dequeue lock.
+            // 我暂时没看懂意图，大概意思是在极端情况下，检查线程在获取到dequeue锁之后，producer又关闭
             if (closed)
                 throw new KafkaException("Producer closed while send in progress");
 
@@ -310,16 +311,23 @@ public RecordAppendResult append(TopicPartition tp,
                 return appendResult;
             }
 
+            // 初始化MemoryRecordsBuilder，初始化DataOutputStream appendStream关键对象
             MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
+            // 新建一个ProducerBatch
             ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
+            // 写入消息到appendStream关键对象
             FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds()));
 
+            // 然后添加到队列尾部
             dq.addLast(batch);
+            // incomplete对象就是个Set<ProducerBatch>, 用来保存还没有发送完成的，包括还没发送的
             incomplete.add(batch);
 
             // Don't deallocate this buffer in the finally block as it's being used in the record batch
+            // 释放buffer资源，因为是HeapByteBuffer，等待GC回收即可
             buffer = null;
 
+            // 返回结果
             return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true);
         }
     } finally {
@@ -329,9 +337,10 @@ public RecordAppendResult append(TopicPartition tp,
     }
 }
 ```
-这里的代码看似很多，其实并不难，我们还是逐步分析下
+下面截取部分调用的代码进行讲解
 
 #### 创建队列
+
 ```java
 /**
  * Get the deque for the given topic-partition, creating it if necessary.
@@ -351,19 +360,9 @@ private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
 从`ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches`中获取该主题分区对应的队列,如果不为空说明已经有了，直接返回，否者创建一个新的ArrayDeque，并放到map中，方便下次使用，
 至于putIfAbsent方法，就是map中之前没有这个key，插入并返回新value，已经有了，就返回之前的value，即Deque
 
-然后就是一行很久我没看懂的代码，细心的同学可能发现了，tryAppend方法一共出现了2次，但不要和batch.tryAppend()方法搞混
-```java
-synchronized (dq) {
-    if (closed)
-        throw new KafkaException("Producer closed while send in progress");
-    RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
-    if (appendResult != null)
-        return appendResult;
-}
-````
-先看看tryAppend方法源码, 然后appendResult为null真正想表达的意思是队列里没有ProducerBatch，得先创建一个，如果不为null，就说明队列里有并且添加消息成功了，直接返回
 
 #### RecordAccumulator#tryAppend方法源码：
+
 其实文档写的很清楚了，就是把消息追加到最后一个ProducerBatch中，但要是队列中一个都没有呢？ 很简单，直接返回null，在外层方法中会判断不为null在结束，否则会分配
 吐槽下：一开始就看岔了，好几个tryAppend，如果是我，我会写成tryAppendInternal之类的方法名
 RecordAppendResult构造方法的最后一个参数表示是否是新建的ProducerBatch，这里返回时也确实返回了false
@@ -390,25 +389,9 @@ private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, H
 }
 ```
 
-#### 创建新的ProducerBatch并发送
-然后又出现了一次tryAppend，注释写道：
-Need to check if producer is closed again after grabbing the dequeue lock
-我暂时没看懂意图，大概意思是在极端情况下，检查线程在获取到dequeue锁之后，producer又关闭
+### ProducerBatch#tryAppend
 
-接下来的代码就很清晰了，新建一个ProducerBatch，然后追加消息，然后添加到队列尾部，而incomplete对象就是个Set<ProducerBatch>, 用来保存还没有发送完成的，包括还没发送的
-最后释放buffer资源
-```java
-MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
-ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
-FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds()));
-
-dq.addLast(batch);
-incomplete.add(batch);
-
-// Don't deallocate this buffer in the finally block as it's being used in the record batch
-buffer = null;
-```
-ProducerBatch的写入主要由MemoryRecordsBuilder完成，底层写入到DataOutputStream appendStream流对象, 也就是nio的ByteBuffer中
+注：一定注意和上面的同名方法的区分
 
 ```java
 public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
@@ -432,7 +415,77 @@ public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, 
 }
 ```
 
-### 步骤
+#### 具体写入过程
+
+recordsBuilder.append的主要实现过程如下：
+首先key，value都会包装成ByteBuffer，写入时都是先写长度，再写内容
+key，value，headers都写入DataOutputStream appendStream流对象中，返回写入的长度
+
+```java
+/**
+ * Write the record to `out` and return its size.
+ */
+public static int writeTo(DataOutputStream out,
+                          int offsetDelta,
+                          long timestampDelta,
+                          ByteBuffer key,
+                          ByteBuffer value,
+                          Header[] headers) throws IOException {
+    int sizeInBytes = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value, headers);
+    ByteUtils.writeVarint(sizeInBytes, out);
+
+    byte attributes = 0; // there are no used record attributes at the moment
+    out.write(attributes);
+
+    ByteUtils.writeVarlong(timestampDelta, out);
+    ByteUtils.writeVarint(offsetDelta, out);
+
+    if (key == null) {
+        ByteUtils.writeVarint(-1, out);
+    } else {
+        int keySize = key.remaining();
+        ByteUtils.writeVarint(keySize, out);
+        Utils.writeTo(out, key, keySize);
+    }
+
+    if (value == null) {
+        ByteUtils.writeVarint(-1, out);
+    } else {
+        int valueSize = value.remaining();
+        ByteUtils.writeVarint(valueSize, out);
+        Utils.writeTo(out, value, valueSize);
+    }
+
+    if (headers == null)
+        throw new IllegalArgumentException("Headers cannot be null");
+
+    ByteUtils.writeVarint(headers.length, out);
+
+    for (Header header : headers) {
+        String headerKey = header.key();
+        if (headerKey == null)
+            throw new IllegalArgumentException("Invalid null header key found in headers");
+
+        byte[] utf8Bytes = Utils.utf8(headerKey);
+        ByteUtils.writeVarint(utf8Bytes.length, out);
+        out.write(utf8Bytes);
+
+        byte[] headerValue = header.value();
+        if (headerValue == null) {
+            ByteUtils.writeVarint(-1, out);
+        } else {
+            ByteUtils.writeVarint(headerValue.length, out);
+            out.write(headerValue);
+        }
+    }
+
+    return ByteUtils.sizeOfVarint(sizeInBytes) + sizeInBytes;
+}
+```
+
+
+### append方法小结
+
 append方法的具体实现过程还是很复杂的，这里说下笔者对这个过程的理解：
 
 1. 尝试获取该TopicPartition下的队列，如果没有则创建
@@ -446,8 +499,10 @@ append方法的具体实现过程还是很复杂的，这里说下笔者对这�
 
 
 ## 总结
+
 kafka发送消息的步骤大致如下：
-1. 更新broker上的元信息
+
+1. 获取broker上的元信息
 2. key, value的序列化
 3. 计算分区
 4. 添加到缓存区

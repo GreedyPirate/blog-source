@@ -1,6 +1,6 @@
 ---
 title: kafka源码环境搭建
-date: 2019-10-29 22:36:18
+date: 2019-11-18 22:36:18
 categories: Kafka Tutorial
 tags: [kafka,中间件,消息]
 toc: true
@@ -31,17 +31,24 @@ zookeeper.connect=localhost:2181/cluster_201
 将config目录下的log4j文件复制到src/main/resources目录下，resources目录自己新建即可
 ![移动log4j文件](https://ae01.alicdn.com/kf/H97695e5cf22d4509b660f785e19ac77dE.png)
 
+
 # 导入IDEA
 解压后导入IDEA中，IDEA会自动开始构建，等待IDEA下载依赖
 
 # 相关问题
+
 如果在编译的过程中出现以下错误
 ```
 You can't map a property that does not exist: propertyName=testClassesDir
 ```
 调整build.gradle中的依赖版本为以下版本
 ![调整版本](https://ae01.alicdn.com/kf/H86c22cdb3be04652b06db45350080181y.png)
-然后继续等待IDEA编译，等待期间多祈祷能下载下来...
+
+
+```
+Cause: org.jetbrains.plugins.gradle.tooling.util.ModuleComponentIdentifierIm Lorg/gradle/api/artifacts/ModuleIdentifier
+```
+如果报以上错误,请检查IDEA是否配置了正确的gradle 4.10.3版本的home路径(尤其是IDEA 2018版本)
 
 遇到下载超时的jar包，可以到maven中央仓库下载jar，通过命名手动安装
 
@@ -49,22 +56,25 @@ You can't map a property that does not exist: propertyName=testClassesDir
 ```
 mvn install:install-file -DgroupId=org.scala-lang -DartifactId=scala-reflect -Dversion=2.10.6 -Dpackaging=jar -Dfile=/Users/admin/scala/scala-reflect-2.10.6.jar
 ```
+然后继续等待IDEA编译，等待期间多祈祷能下载下来...
 
 # 启动
 首先启动Zookeeper，成功构建之后，调整kafka的启动参数
+注：建议将jvm堆内存设置小一点，kafka默认是1G，本机机器完全没有必要 -Xmx512m -Xms512m 
 ![启动参数](https://ae01.alicdn.com/kf/H43d9e3cc1fad40fdbdba654de897c442J.png
 )
 
 启动成功之后控制台如下
 ![](https://ae01.alicdn.com/kf/H0dccf862d1364893ac367dce5856bc72l.png
 )
+注：日志不打印问题见我的另一篇博客-[kafka本地启动后不打印日志问题]()
 
 # 测试
 向topic中发送消息之后，logs目录产生了日志文件
 ![lgos目录](https://ae01.alicdn.com/kf/Ha8852196a2bc47c993dd79367104e549v.png
 )
 
-
+以上步骤已在MacOS和Windows系统上验证通过，遇到问题的同学请在评论区写下问题，我会尽量解答
 
 
 

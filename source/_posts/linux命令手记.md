@@ -90,7 +90,7 @@ top -p <pid> -H ：查看进程中各线程详情
 
 按pid统计连接数
 ```bash
-netstat -natp|awk 'print $7'|sort|uniq -c|sort -rn
+netstat -natp|awk 'print $7'|uniq -c|sort -rn
 ```
 
 ## awk入门

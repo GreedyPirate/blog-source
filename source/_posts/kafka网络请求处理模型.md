@@ -14,14 +14,14 @@ Reactor线程模型即为Java NIO中的selector模型。最简单的Reactor模�
 ![Reactor线程模型](https://ae01.alicdn.com/kf/H969ad8e2946e4fd284760f4868e91fcfD.png
 )
 
-Acceptor(Dispatcher)将变得十分轻量，因为它只负责分发，不用处理十分复杂的逻辑，而worker线程可以伸容、缩容，达到负载均衡的效果。
+Dispatcher将变得十分轻量，因为它只负责分发，不用处理十分复杂的逻辑，而worker线程可以伸容、缩容，达到负载均衡的效果。
 但是当处理读写任务的线程负载过高后，处理速度下降，事件会堆积，严重的会超时，可能导致客户端重新发送请求，性能越来越差
 
 # Kafka
 kafka server中当Acceptor将请求分发给Processor后，Processor并不处理，而是将请求放入到一个请求队列(requestQueue)中
-同时还有一个IO线程池(KafkaRequestHandlerPoll)，该线程池大小由num.io.threads参数控制，默认为8，其中的KafkaRequestHandler线程，通过轮询的方式(300ms)从请求队列中取出请求，执行真正的处理。
+同时还有一个IO线程池(KafkaRequestHandlerPoll)，该线程池大小由num.io.threads参数控制，默认为8，其中的KafkaRequestHandler线程，循环从请求队列中取出请求，执行真正的处理。
 
-KafkaRequestHandler背后真正负责处理的是一个叫做KafkaApis的类，它可以处理40多种请求，包含client与其它broker的请求，其中最重要的就是PRODUCE生产请求和FETCH消费拉取请求。PRODUCE将消息写入日志中；FETCH则从磁盘或页缓存中读取消息。
+KafkaRequestHandler背后真正负责处理的是一个叫做KafkaApis的类，它可以处理40多种请求，包含client与其它broker的请求，其中最常见的就是PRODUCE生产请求和FETCH消费拉取请求。PRODUCE将消息写入日志中；FETCH则从磁盘或页缓存中读取消息。
 
 当IO线程处理完请求后，会将生成的响应发送到网络线程池的响应队列中，然后由对应的网络线程负责将Response返还给客户端。
 请求队列是所有网络线程共享的，而响应队列则是每个网络线程专属的。这么设计的原因就在于，Acceptor只是用于请求分发而不负责响应回传，因此只能让每个网络线程自己发送Response给客户端，所以这些Response也就没必要放在一个公共的地方。
@@ -79,7 +79,8 @@ private def createAcceptorAndProcessors(processorsPerListener: Int,
 
 ### Acceptor类简要分析
 
-进入到Acceptor类中，下面这行代码建立了socket。注：scala类中，非方法的语句在初始化之前都会先执行，而java中语句只能定义在方法中
+进入到Acceptor类中，下面这行代码建立了socket
+注：scala类中，非方法的语句在初始化之前都会先执行，而java中语句只能定义在方法中
 
 Acceptor的初始化是一个标准的nio ServerSocketChannel创建
 ```java
@@ -133,8 +134,7 @@ def run() {
 	}    
 }
 ```
-注意accept(key, processor)这行代码是将请求保存到了Processor对象一个叫做newConnections队列对象中了，它的类型为ConcurrentLinkedQueue<SocketChannel>
-这为Processor后续的处理埋下了伏笔
+注意accept(key, processor)这行代码是将请求保存到了Processor对象一个叫做newConnections队列对象中了，它的类型为ConcurrentLinkedQueue[SocketChannel].这为Processor后续的处理埋下了伏笔
 
 ### Processor初始化
 
@@ -240,7 +240,7 @@ private def processCompletedReceives() {
 
 ## KafkaRequestHandler
 
-KafkaRequestHandler线程run方法如下, requestChannel.receiveRequest就是每300ms从requestQueue轮询请求，最后交给KafkaApis#handle方法处理
+KafkaRequestHandler线程run方法如下, requestChannel.receiveRequest就是从requestQueue队列中循环获取请求(300ms是超时时间)，最后交给KafkaApis#handle方法处理
 
 ```java
 def run() {
