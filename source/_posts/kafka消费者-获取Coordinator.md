@@ -1,13 +1,52 @@
 ---
 title: kafka消费者-获取Coordinator
-date: 2019-11-08 15:50:55
+date: 2020-03-11 14:50:55
 categories: Kafka Tutorial
 tags: [kafka,中间件,消息]
 toc: true
 comments: true
 ---
 
->本文主要介绍Consumer在第一次拉取消息前，获取Coordinator的过程
+>本文主要介绍Consumer在第一次拉取消息前，获取Coordinator的过程，衔接[Kafka消费者-源码分析]()一文
+
+# 前言
+
+在ConsumerCoordinator的poll方法中，我们聊到第一次poll时，consumer需要加入消费者组，此时coordinator未知，需要向broker获取
+```java
+public boolean poll(final long timeoutMs) {
+  // 省略大部分源码.....
+  if (coordinatorUnknown()) {
+
+      if (!ensureCoordinatorReady(remainingTimeAtLeastZero(timeoutMs, elapsed))) {
+          // 直接返回了false
+          return false;
+      }
+  }
+  return true;
+}
+```
+ensureCoordinatorReady方法也很简单，主要是lookupCoordinator方法
+```java
+protected synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
+    // 循环直至coordinator可用
+    while (coordinatorUnknown()) {
+        // 发送查找coordinator请求
+        final RequestFuture<Void> future = lookupCoordinator();
+        // 等待future返回结果
+        client.poll(future, remainingTimeAtLeastZero(timeoutMs, elapsedTime));
+        if (!future.isDone()) {
+            // 时间用完了还没结束(没拿到响应)
+            break;
+        }
+        // 失败重试或抛异常
+        if (future.failed()) {
+          // ...
+        }
+    }
+    return !coordinatorUnknown();
+}
+```
+lookupCoordinator主要是调用了sendFindCoordinatorRequest来发起FindCoordinator请求
 
 # 请求
 
@@ -178,5 +217,11 @@ private def getPartitionMetadata(topic: String, listenerName: ListenerName, erro
 
 # 小结
 FindCoordinatorRequest请求是consumer在拉取消息时的前置步骤，用于确保coordinator的存在，broker具体的做法是根据consumer的groupId确定其所在的__consumer_offsets分区，之后再获取该分区的元数据，主要的元信息为分区leader，replica，isr集合，离线副本集合
+
+下面是在客户端角度，coordinator初始化的流程，大致归纳为：以groupId为参数，向一个负载最小(未完成请求最少)的节点发送请求，成功之后初始化coordinator
+![初始化流程](https://ae01.alicdn.com/kf/Hcc2697b072b84bd7a8f5a749e43613c5n.png)
+
+
+
 
 

@@ -1,6 +1,6 @@
 ---
 title:  Kafka消费者-ListOffsets请求
-date: 2019-11-09 11:53:23
+date: 2020-03-15 11:53:23
 categories: Kafka Tutorial
 tags: [kafka,中间件,消息]
 toc: true
@@ -14,7 +14,7 @@ comments: true
 主要应用场景为消费者第一次拉取消息时，不知道从哪个offset拉取，这个拉取策略可以消费者通过auto.offset.reset指定，请求时翻译成timeStamp(ListOffsetRequest类常量)，
 server端处理时从日志(LogSegment)中查找应该被fetch的offset(TimestampOffset)
 
-在消费者之后的拉取中，记录了上次拉取的位置(TopicPartitionState@position)，不用再重新获取
+在消费者之后的拉取中，记录了上次拉取的位置(TopicPartitionState@position)
 
 # 源码解析
 
@@ -22,7 +22,7 @@ server端处理时从日志(LogSegment)中查找应该被fetch的offset(Timestam
 
 ## handleListOffsetRequest
 
-忽略别的代码，仅关注handleListOffsetRequestV1AndAbove方法, 它返回了每个TP对应的fetch offset
+忽略认证，校验等代码，仅关注handleListOffsetRequestV1AndAbove方法, 它返回了每个TP对应的fetch offset
 
 ```java
 private def handleListOffsetRequestV1AndAbove(request : RequestChannel.Request): Map[TopicPartition, ListOffsetResponse.PartitionData] = {
@@ -86,6 +86,16 @@ private def handleListOffsetRequestV1AndAbove(request : RequestChannel.Request):
 该方法就是根据客户端的reset policy(TimeStamp)来返回offset
 
 ```java
+private def fetchOffsetForTimestamp(topicPartition: TopicPartition, timestamp: Long): Option[TimestampOffset] = {
+    replicaManager.getLog(topicPartition) match {
+      case Some(log) =>
+        // 从Log的所有Segment里，根据timestamp找offset
+        log.fetchOffsetsByTimestamp(timestamp)
+      case None =>
+        throw new UnknownTopicOrPartitionException(s"$topicPartition does not exist on the broker.")
+    }
+}
+
 def fetchOffsetsByTimestamp(targetTimestamp: Long): Option[TimestampOffset] = {
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
     
@@ -117,6 +127,32 @@ def fetchOffsetsByTimestamp(targetTimestamp: Long): Option[TimestampOffset] = {
 }
 ```
 
+该方法实现了根据时间戳查找offset，想必大家都很好奇实现过程，它的原理分为3步：
+1. 先找到segment，每个segment都有自己的largestTimestamp，循环查找即可
+2. 我们知道segment和时间索引，位移索引的文件名是一样的，接下就可以从时间索引(timeIndex)文件中找到相应的offset
+3. 通过第2步的offset，在位移索引文件中查找到position
+
+以上过程我在[kafka消息格式与日志存储原理分析]()一文中也已单独做了分析，包括消息的二分查找算法实现，想要深入理解的同学可以看看
+
+具体的实现在findOffsetByTimestamp方法中
+
+```java
+def findOffsetByTimestamp(timestamp: Long, startingOffset: Long = baseOffset): Option[TimestampOffset] = {
+  // Get the index entry with a timestamp less than or equal to the target timestamp
+
+  val timestampOffset = timeIndex.lookup(timestamp)
+  val position = offsetIndex.lookup(math.max(timestampOffset.offset, startingOffset)).position
+
+  // Search the timestamp
+  Option(log.searchForTimestamp(timestamp, position, startingOffset)).map { timestampAndOffset =>
+    TimestampOffset(timestampAndOffset.timestamp, timestampAndOffset.offset)
+  }
+}
+```
+
+# 总结
+
+本文详细描述的LIST_OFFSETS请求的处理过程，在[Kafka消费者-源码分析(上)]()一文中也知道了什么情况下会发送该请求，简单说这个请求是为auto.offset.reset参数服务的
 
 
 

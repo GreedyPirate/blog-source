@@ -202,8 +202,7 @@ var segmentEntry = segments.floorEntry(startOffset)
 ### 时间索引
 
 时间索引为.timeindex文件，它的原理是根据要查找的时间戳(targetTimestamp)，先找到相应的Segment，但是并没有一个Map保存了时间戳和Segment的映射关系，而Segment保存了当前分段中最大的时间戳(largestTimestamp)，所以需要遍历所有的Segment，找出第一个最大时间戳比targetTimestamp大的Segment
-找到Segment后，通过查找.timeindex索引文件，查询
-先找到offset，然后再去.index文件找到相应的position，最后再去.log日志文件中查找
+找到Segment后，通过查找.timeindex索引文件，查询先找到offset，然后再去.index文件找到相应的position，最后再去.log日志文件中查找
 
 以上过程发生在Log类的fetchOffsetsByTimestamp方法，关键部分的代码如下
 
@@ -231,6 +230,39 @@ def findOffsetByTimestamp(timestamp: Long, startingOffset: Long = baseOffset): O
 }
 ```
 
+#### 二分查找过程
+
+先说说3个参数，分别是：索引文件，要查找的目标值，查找类型，kafka将索引文件中的每一条数据抽象成一个entry，查找类型就是指按Key还是按Value查找
+
+查找过程是一个十分简单的二分查找算法
+```java
+private def indexSlotRangeFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): (Int, Int) = {
+    // check if the index is empty
+    if(_entries == 0)
+      return (-1, -1)
+
+    // check if the target offset is smaller than the least offset
+    if(compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
+      return (-1, 0)
+
+    // binary search for the entry
+    var lo = 0
+    var hi = _entries - 1
+    while(lo < hi) {
+      val mid = ceil(hi/2.0 + lo/2.0).toInt
+      val found = parseEntry(idx, mid)
+      val compareResult = compareIndexEntry(found, target, searchEntity)
+      if(compareResult > 0)
+        hi = mid - 1
+      else if(compareResult < 0)
+        lo = mid
+      else
+        return (mid, mid)
+    }
+
+    (lo, if (lo == _entries - 1) -1 else lo + 1)
+}
+```
 
 
 

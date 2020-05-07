@@ -1,6 +1,6 @@
 ---
 title: kafka-rebalance之SyncGroup
-date: 2020-04-24 15:33:37
+date: 2020-03-12 19:33:37
 categories: Kafka Tutorial
 tags: [kafka,中间件,消息]
 toc: true
@@ -93,7 +93,7 @@ def handleSyncGroup(groupId: String,
 
 ## doSyncGroup
 
-通过[kafka-rebalance之JoinGroup]()我们一直当前消费者组处于CompletingRebalance状态，这里的分支我们只用看它即可
+通过[kafka-rebalance之JoinGroup]()我们一已知当前消费者组处于CompletingRebalance状态，这里的分支我们只用看它即可
 
 ```java
 private def doSyncGroup(group: GroupMetadata,
@@ -161,7 +161,7 @@ private def setAndPropagateAssignment(group: GroupMetadata, assignment: Map[Stri
 
 ## 响应客户端
 
-该方法的处理逻辑也十分简单：调用回调响应客户端，开始执行定时任务监控member的心跳
+该方法的处理逻辑也十分简单：调用回调响应每个客户端，响应的内容是每个consumer的assignment(分配方案)，并在之后开始执行定时任务监控member的心跳
 
 ```java
 private def propagateAssignment(group: GroupMetadata, error: Errors) {
@@ -178,7 +178,6 @@ private def propagateAssignment(group: GroupMetadata, error: Errors) {
 
 响应的回调函数比较简单，可以回到最上面看handleSyncGroupRequest方法，就是把member的分配方案返回，而completeAndScheduleNextHeartbeatExpiration的作用是记录一次成功的心跳，并将下一次心跳的延迟任务放入Purgatory，同样的我们把它理解为延迟队列即可
 
-# 总结
 
 
 

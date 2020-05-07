@@ -105,7 +105,7 @@ ReplicaFetcherThread的类图如下，执行的主体在它的父类AbstractFetc
 
 ## 同步线程doWork
 
-AbstractFetcherThread的doWork方法是副本同步的入口，
+AbstractFetcherThread的doWork方法是副本同步的入口，其中maybeTruncate是0.11版本之后，副本恢复的截断协议从HW改为leader epoch方式，过程较为复杂，后续会单独分析
 
 ```java
 override def doWork() {
@@ -125,6 +125,8 @@ override def doWork() {
     processFetchRequest(fetchRequest)
 }
 ```
+
+
 
 
 

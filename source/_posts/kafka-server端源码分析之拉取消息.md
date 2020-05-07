@@ -54,27 +54,15 @@ data.metadata方法返回的FetchMetadata主要包含epoch和sessionId两个字�
 相信大部分参数大家都是熟悉的，而epoch，sessionId和toForget是专门用于FetchSession的实现，它是1.1.0版本新增的功能，这里我只说它出现的背景
 
 ### FetchSession背景
+
 FetchSession出现是为了解决什么问题？
 在kafka集群中的topic和partition达到一定规模后，会产生大量的Fetch请求，既包含消息拉取，也包含副本同步，而后者的请求量会很大。
 假设100个topic，每个topic有3个分区，每个分区有3个副本，那么同时就有600个follower副本发送Fetch请求，再加上活动期间的业务量猛增的消费者的请求，Fetch请求的QPS将会很高
 并且Fetch的请求体本身就很大，通常有几十KB，但是大部分参数都是不变的，比如订阅的分区，拉取参数等，因此可以将这些参数缓存在server端，client用一个session id来代替一次会话
 这对Fetch请求的性能将是一个瓶颈，因此需要对请求体优化
 
-
-
-
-
-
-
-
-
-
-
-
-
 其中大部分的参数大家都很熟悉，主要说2个不常见的参数：metadata和toForget
 这两个参数是kafka 1.1.0版本之后新加的，用于FetchSession的实现，主要解决了在server端没有接收到消息时，消费者会空轮询，在topic分区较多时，FetchSession为Fetch请求体起到了瘦身的作用
-
 
 想象一下每个client不止订阅一个topic，也会不止分配到一个TopicPartition，消费者在发送FETCH请求之前，要知道每个partition的leader副本在哪个broker上，然后按照broker分组，fetch请求体很大并不是空穴来风，kafka对此进行优化是很有必要的
 

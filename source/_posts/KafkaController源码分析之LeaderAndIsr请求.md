@@ -14,7 +14,7 @@ comments: true
 
 ## 又见内存队列
 
-和ControllerEventManager一样，ControllerChannelManager也是用的异步内存队列来处理请求的发送，它的大致原理如下：
+和ControllerEventManager一样，ControllerChannelManager也是用的异步内存队列来处理请求的发送，它只用于Controller节点和其它broker通信，它的大致原理如下：
 1. ControllerBrokerRequestBatch用3个Map分别维护了leaderAndIsrRequest，stopReplicaRequest，updateMetadataRequest三种请求的缓存
 2. 当KafkaController等组件想要发送请求时，仅仅是通过addXXXRequestForBrokers方法，将请求参数添加到缓存中，而在调用sendRequestsToBrokers方法后，它会遍历3中请求的缓存，将请求参数，回调函数等封装为QueueItem对象，放入一个类型为BlockingQueue[QueueItem]的messageQueue中
 3. 在RequestSendThread线程启动后，从messageQueue中取出请求对象，发送请求，响应后调用回调函数进行处理
