@@ -138,7 +138,9 @@ handleFetchRequest方法主要是过滤请求中可用的TopicPartition作为int
 
 # ReplicaManager#fetchMessages
 
-fetchMessages方法中主要调用了readFromLog->readFromLocalLog方法来读取消息
+fetchMessages方法中主要调用了readFromLog->readFromLocalLog方法来读取消息，readFromLocalLog返回的是一个LogReadResult对象，如果当前是follower副本发送的用于同步的fetch请求，还会调用updateFollowerLogReadResults更新同步状态，这一部分内容在[kafka server端源码分析之副本同步]()中做了详细阐述
+
+由于Consumer拉取消息有一系列的参数控制，如fetch.max.wait.ms，fetch.min.bytes，fetch.max.wait.ms等，让本次fetch不能立即完成，需要新建一个DelayedOption对象，放入Purgatory中，等待后续操作触发本次请求的完成(complete)。Purgatory可以简单理解为一个延迟队列
 
 ```java
 def fetchMessages(timeout: Long,
@@ -233,14 +235,6 @@ def fetchMessages(timeout: Long,
     }
 }
 ```
-
-该方法还是有一定的复杂度，需要点耐心，但是思路也很清晰，以下这行代码读取消息，之后对结果进行处理
-```java
-val logReadResults = readFromLog()
-```
-
-由于Consumer有一系列的参数控制，如fetch.max.wait.ms，fetch.min.bytes等，让本次fetch不能立即完成
-需要新建一个DelayedOption对象，放入Purgatory中，等待后续操作触发本次请求的完成(complete)
 
 接下来就从readFromLocalLog方法看看如何读取消息
 

@@ -11,10 +11,9 @@ comments: true
 
 本文聊聊消费者拉取消息时向kafka server发送LIST_OFFSETS的请求，这个请求的功能一言以蔽之:根据请求参数中的timeStamp获取消费者(或副本)能够fetch的位移
 
-主要应用场景为消费者第一次拉取消息时，不知道从哪个offset拉取，这个拉取策略可以消费者通过auto.offset.reset指定，请求时翻译成timeStamp(ListOffsetRequest类常量)，
-server端处理时从日志(LogSegment)中查找应该被fetch的offset(TimestampOffset)
+它的使用场景是：当前是新消费者组，或是消费者组过期了(相关参数为offsets.retention.minutes)，此时Coordinator不知道consumer上一次消费到哪了
 
-在消费者之后的拉取中，记录了上次拉取的位置(TopicPartitionState@position)
+在消费者之后的拉取中，和OffsetFetch请求一样，也会保存到TopicPartitionState@position
 
 # 源码解析
 

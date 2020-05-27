@@ -41,7 +41,7 @@ pwa:
 
 # Highlight theme
 # ---------------
-highlight_theme: default
+highlight_theme: idea
 
 # code_word_wrap: true or false
 
