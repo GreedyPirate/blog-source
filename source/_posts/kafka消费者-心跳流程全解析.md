@@ -65,15 +65,14 @@ public long timeToNextHeartbeat(long now) {
 }
 ```
 
-该方法用于Consumer端判断session是否过期，我想表达的意思是Coordinator端也会计算
+该方法用于Consumer端判断session是否过期
 ```java
 public boolean sessionTimeoutExpired(long now) {
     // 距离上次发送心跳成功的时间 是否大于sessionTimeout
     return now - Math.max(lastSessionReset, lastHeartbeatReceive) > sessionTimeoutMs;
 }
 ```
-该方法从字面意思理解为充值sessionTimeout起始时间点，大家可能觉得不好理解，我在这里直接说何时调用：获取到Coordinator，心跳线程暂停后重新启动(Consumer入组之后)
-在这两个时间点重置起始时间点，大家应该好理解的多
+该方法从字面意思理解为充值sessionTimeout起始时间点，大家可能觉得不好理解，我在这里直接说何时调用：获取到Coordinator，心跳线程暂停后重新启动(Consumer入组之后)。在这两个时间点重置起始时间点，大家应该好理解的多
 ```java
 public void resetTimeouts(long now) {
     this.lastSessionReset = now;
@@ -242,9 +241,7 @@ synchronized RequestFuture<Void> sendHeartbeatRequest() {
 
 依然是KafkaApis为入口，具体是handleHeartbeatRequest方法，认证相关省略，核心在coordinator的handleHeartbeat方法，为了节省篇幅，以下省略部分源码
 
-当消费者组为stable状态时，主要调用completeAndScheduleNextHeartbeatExpiration，这里我保留了一个异常：UNKNOWN_MEMBER_ID，因为我经常看见它
-
-The coordinator is not aware of this member
+当消费者组为stable状态时，主要调用completeAndScheduleNextHeartbeatExpiration，这里我保留了一个异常：UNKNOWN_MEMBER_ID，因为我经常看见它：The coordinator is not aware of this member
 
 ```java
 def handleHeartbeat(groupId: String,

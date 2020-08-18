@@ -438,8 +438,3 @@ def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, part
 ![副本同步流程](https://pic.downk.cc/item/5eb61275c2a9a83be5467f7e.png)
 
 
-
-
-ADD COLUMN `xxl_job_qrtz_trigger_info` tinyint(4) NOT NULL DEFAULT 0 COMMENT '是否需要报警' after `alarm_email`
-
-
